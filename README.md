@@ -1,35 +1,28 @@
 # Entity-Component-System
-Heavily templated ECS system, focused on bringing the least amount of overhead, where components are known by compile time.
+
+Heavily templated ECS system, focused on bringing the least amount of overhead, where components are known at compile time.
+
 Alpha state, still a WIP.
 
 # Query examples
-
-Notes:
-* `<Type>.data` is just a field of the component.
 
 Call lambda on all entities that have the `One` and `Two` components and do operations on both
 ```cpp
 world.query([](One& one, Two& two) -> void
 {
-	two.data = _mm_mul_ps(two.data, a);
-	two.data = _mm_mul_ps(two.data, two.data);
-
-	one.data = _mm_mul_ps(one.data, a);
-	one.data = _mm_mul_ps(one.data, one.data);
+	// do something with `one` and/or `two`
 });
 ```
 
 Call lambda on all entities that have the `One` and `Four`, but not `Three` components and do operations on `Four`
-Go through all entities that don't have the component `One` and do something with the entity id
 ```cpp
 world.query<One, ecs::exclude<Three>>([](Four& four) -> void
 {
-	four.data = _mm_mul_ps(four.data, a);
-	four.data = _mm_mul_ps(four.data, four.data);
+	// do something with `four`
 });
 ```
 
-Go through all entities that don't have the component `One` and do something with the entity id
+Call lambda on all entities that don't have the component `One` and do something with the entity id
 ```cpp
 world.query<ecs::exclude<One>>([](Entity entity) -> void
 {
@@ -37,13 +30,21 @@ world.query<ecs::exclude<One>>([](Entity entity) -> void
 });
 ```
 
+Count all entities that have the `One`, `Six`, and `Seven`, but not `Three` components.
+```cpp
+size_t count = world.count<One, Six, Seven, ecs::exclude<Three>>();
+```
+
 # Benchmark
+
 Notes:
-* Check the [benchmark/Main.cpp](https://github.com/Fortahr/ecs/blob/main/benchmark/Main.cpp) file for the all the code that's being benchmarked,
-* I mostly compare `bucket<0*>'` and `bucket<0*>'v` with `query<0*>_` as they actually do some work (4x4 matrix multiplications),
-* Results fluctuate, like the winner in above comparison can change each run, but they are always around the same numbers,
-* Archetypes with only 1 component, run around the same speed as its raw counterpart,
+* See [benchmark/Main.cpp](https://github.com/Fortahr/ecs/blob/main/benchmark/Main.cpp) for the the benchmark code,
+* I mostly compare `bucket<0*>'` and `bucket<0*>'v` with `query<0*>_` as they actually do work (4x4 matrix multiplications),
+* Results fluctuate, like the winner of above comparison changes each run, but are always close,
+* Archetypes with only 1 component run around the same speed as its raw counterpart,
+* Archetypes with more than 1 component run slower than raw with only 1 component,
 * Simple, single-ish instructions seem to come out as a bit slower than its raw counterpart (needs confirmation).
+
 ```
 Test name           run 1      run 2      run 3      run 4      run 5      run 6      run 7      run 8   ent.#     avg.time/op
 
@@ -83,5 +84,11 @@ v    Obsolete, evaluates reinterpret overhead due to potential optimization miss
 ```
 
 # WIP
-1. Entity id system still needs testing,
-2. Requires production environment testing.
+
+1. Entity `get` component needs an implementation,
+2. Entity id system needs testing,
+3. Production environment testing.
+4. R&D for omission of global entity id reservations, reducing memory footprint, some ideas;
+	1. grouping, 1 id for a whole group (e.g.: static geometry),
+	2. entity is never targeted, removed with world,
+	3. only reserve id when actually targeted.
