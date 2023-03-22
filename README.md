@@ -2,7 +2,17 @@
 
 Heavily templated ECS system, focused on bringing the least amount of overhead, where components are known at compile time.
 
-Alpha state, still a WIP.
+* Alpha state, still a WIP,
+* Archetype ECS Model,
+* Header only,
+* C++17,
+* Pre-registered components,
+* Makes use of STL containers, e.g.: `array`, `vector`, `tuple`,
+* Bitmask component lookups, currently up to 64 components,
+* Query components by function/lambda parameters,
+* Exclude components in queries,
+* Up to 256 worlds supported, keeping the `entity` type at 8 bytes of size,
+
 
 # Query examples
 
@@ -87,7 +97,8 @@ v    Obsolete, evaluates reinterpret overhead due to potential optimization miss
 
 1. Entity `get` component needs an implementation,
 2. Entity id system needs testing,
-3. Production environment testing.
+3. Production environment testing,
+4. Task Scheduler,
 4. R&D for omission of global entity id reservations, reducing memory footprint, some ideas;
 	1. grouping, 1 id for a whole group (e.g.: static geometry),
 	2. entity is never targeted, removed with world,
