@@ -2,25 +2,23 @@
 
 #include <cstdint>
 
+#include "config.h"
+
 namespace ecs
 {
-	template<typename _Registry, size_t _BucketSize>
 	class world;
 
-	struct entity
+	class entity
 	{
-		template<typename, size_t> friend class world;
+		friend class world;
 
 	private:
 		union
 		{
 			struct
 			{
-				// 16,777,216 reuses of the id before any false positives could theoretically happen.
-				uint32_t _version : 24;
-
-				// Supports up to 256 worlds.
-				uint32_t _world : 8;
+				uint32_t _version : 32 - config::world_bits;
+				uint32_t _world : config::world_bits;
 			};
 
 			// Quick uint32 == uint32 (version + world) check.
@@ -39,6 +37,9 @@ namespace ecs
 
 	public:
 		entity();
+
+		template<typename _T>
+		_T* get();
 
 		uint32_t get_id();
 

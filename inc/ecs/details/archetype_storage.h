@@ -6,24 +6,25 @@
 #include <utility>
 #include <cstdlib>
 
-#include "utils.h"
+#include "../utils.h"
+#include "component_matrix.h"
 
 namespace ecs
 {
 	namespace details
 	{
-		template <size_t _Size, typename... _Components>
+		template <typename... _Components>
 		class archetype_storage;
 
 		struct entity_target
 		{
 			uint32_t _version;
 			uint32_t _index;
-			archetype_storage<64>* _archetype;
+			archetype_storage<>* _archetype;
 
-			static constexpr archetype_storage<64>* npos = nullptr;
+			static constexpr archetype_storage<>* npos = nullptr;
 
-			void set(archetype_storage<64>* archetype, uint32_t index)
+			void set(archetype_storage<>* archetype, uint32_t index)
 			{
 				this->_archetype = archetype;
 				this->_index = index;
@@ -42,19 +43,19 @@ namespace ecs
 			}
 		};
 
-		template <size_t _Size, typename... _Components>
+		template <typename... _Components>
 		class archetype_storage
 		{
 		public:
 			class bucket
 			{
-				friend class archetype_storage<_Size, _Components...>;
+				friend class archetype_storage<_Components...>;
 			public:
-				typedef std::tuple<std::array<_Components, _Size>...> ComponentData;
+				typedef component_matrix<_Components...> ComponentData;
 
 			private:
-				std::array<entity, _Size> toEntity;
-				alignas(8) ComponentData componentData;
+				std::array<entity, config::component_row_count> _to_entity;
+				alignas(8) ComponentData _component_data;
 
 			public:
 				static constexpr size_t size();
@@ -63,19 +64,19 @@ namespace ecs
 
 				constexpr const ComponentData& components() const;
 
-				constexpr const std::array<entity, _Size>& entities() const;
+				constexpr const std::array<entity, config::component_row_count>& entities() const;
 
 				template<typename _T>
-				constexpr std::array<_T, _Size>& get();
+				constexpr component_row<_T>& get();
 
 				template<typename _T>
-				constexpr const std::array<_T, _Size>& get() const;
+				constexpr const component_row<_T>& get() const;
 
 				template<size_t _Index>
-				constexpr std::array<std::tuple_element_t<_Index, std::tuple<_Components...>>, _Size>& get();
+				constexpr component_row<std::tuple_element_t<_Index, std::tuple<_Components...>>>& get();
 
 				template<size_t _Index>
-				constexpr const std::array<std::tuple_element_t<_Index, std::tuple<_Components...>>, _Size>& get() const;
+				constexpr const component_row<std::tuple_element_t<_Index, std::tuple<_Components...>>>& get() const;
 
 				/*void* operator new(size_t size)
 				{
@@ -97,36 +98,41 @@ namespace ecs
 			};
 
 		private:
-			size_t componentMask = 0;
+			size_t _component_mask = 0;
 
 			// stored as `offset / _Size` removing unused precision
-			uint16_t componentOffsets[std::numeric_limits<size_t>::digits] = { uint16_t(~0) };
+			uint16_t _component_offsets[std::numeric_limits<size_t>::digits];
 
-			size_t entityCount = 0;
-			std::vector<bucket*> buckets;
+			size_t _entity_count = 0;
+			std::vector<bucket*> _buckets;
 
 			std::pair<uint32_t, uint32_t>(*removeOperation)(archetype_storage& storage, size_t index) = &remove;
 
 			static std::pair<uint32_t, uint32_t> remove(archetype_storage& storage, size_t index);
 
+			template<typename _T, typename _ComponentMatrix>
+			void initialize_component_offset();
+
 		public:
 			template<typename... _Cs, typename = std::enable_if_t<(sizeof...(_Components) == 0)>>
 			static std::pair<uint32_t, uint32_t> remove_generic(archetype_storage& storage, size_t index, ecs::registry<_Cs...>);
 
-		public:
-			archetype_storage() = default;
+			archetype_storage();
 
-			template<typename _Registry, typename... _Cs>
-			archetype_storage<_Size, _Cs...>& initialize();
+			template<typename... _Cs>
+			archetype_storage<_Cs...>& initialize();
 
 			size_t size() const;
 
 			size_t component_mask() const;
 
 			template<size_t _Index>
-			uint16_t component_offset() const;
+			size_t component_offset() const;
 
-			uint16_t component_offset(size_t index) const;
+			size_t component_offset(size_t index) const;
+
+			template<typename _T>
+			_T* get_component(entity_target entity) const;
 
 			uint32_t emplace(entity entity);
 

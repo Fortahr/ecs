@@ -7,7 +7,7 @@
 
 #include <ecs/world.h>
 
-#include "EngineRegistry.h"
+#include "Components.h"
 
 using namespace Esteem;
 
@@ -45,14 +45,14 @@ inline void Test2(One& one, Two& two)
 
 int main()
 {
-	ecs::world<EngineRegistry<Six, Seven, Eight, Nine>> world;
+	ecs::world world;
 	//FillWorld(world);
 
-	std::vector<std::array<Esteem::Two, 64>*> base1;
-	std::vector<ecs::details::archetype_storage<64, Esteem::Two>::bucket*> base2;
-	std::vector<ecs::details::archetype_storage<64, Esteem::Zero>::bucket*> base0;
+	std::vector<std::array<Esteem::Two, ecs::config::component_row_count>*> base1;
+	std::vector<ecs::details::archetype_storage<Esteem::Two>::bucket*> base2;
+	std::vector<ecs::details::archetype_storage<Esteem::Zero>::bucket*> base0;
 	std::vector<void*> base0void_;
-	auto& base0void = reinterpret_cast<std::vector<ecs::details::archetype_storage<64, Zero>::bucket*>&>(base0void_);
+	auto& base0void = reinterpret_cast<std::vector<ecs::details::archetype_storage<Zero>::bucket*>&>(base0void_);
 
 	//world.reserve_entities<Zero, One, Two, Three>(10'000'000);
 	//world.reserve_entities<Three, Four, Five>(10'000'000);
@@ -66,13 +66,13 @@ int main()
 		bucket = new std::array<Two, 64>();
 
 	for (auto*& bucket : base2)
-		bucket = new ecs::details::archetype_storage<64, Two>::bucket();
+		bucket = new ecs::details::archetype_storage<Two>::bucket();
 
 	for (auto*& bucket : base0)
-		bucket = new ecs::details::archetype_storage<64, Zero>::bucket();
+		bucket = new ecs::details::archetype_storage<Zero>::bucket();
 
 	for (auto*& bucket : base0void)
-		bucket = new ecs::details::archetype_storage<64, Zero>::bucket();
+		bucket = new ecs::details::archetype_storage<Zero>::bucket();
 
 	for (size_t i = 0; i < 10'000'000; ++i)
 		world.emplace_entity<One, Two, Three>();
@@ -109,7 +109,7 @@ int main()
 		BEGIN_TEST("bucket<0*>'   ")
 			for (auto& bucket : base0)
 			{
-				for (Zero& zero : bucket->get<Zero>())
+				for (Zero& zero : bucket->get<Zero>()._elements)
 				{
 					zero.data *= zero.data;
 				}
@@ -120,7 +120,7 @@ int main()
 		BEGIN_TEST("bucket<0*>'v  ")
 			for (auto& bucket : base0void)
 			{
-				for (Zero& zero : bucket->get<Zero>())
+				for (Zero& zero : bucket->get<Zero>()._elements)
 				{
 					zero.data *= zero.data;
 				}
@@ -131,7 +131,7 @@ int main()
 		BEGIN_TEST("bucket<2*>'   ")
 			for (auto& bucket : base2)
 			{
-				for (Two& two : bucket->get<Two>())
+				for (Two& two : bucket->get<Two>()._elements)
 				{
 					two.data = _mm_mul_ps(two.data, a);
 					two.data = _mm_mul_ps(two.data, two.data);
