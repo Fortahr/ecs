@@ -95,7 +95,6 @@ v    Obsolete, evaluates reinterpret overhead due to potential optimization miss
 
 # WIP
 
-1. Entity `get` component needs an implementation,
 2. Entity id system needs testing,
 3. Production environment testing,
 4. Task Scheduler,
