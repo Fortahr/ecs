@@ -12,12 +12,6 @@ namespace ecs::config
 	typedef ECS_REGISTRY_CLASS Registry;
 #endif
 
-#ifndef ECS_COMPONENT_ROW_COUNT
-	constexpr size_t component_row_count = 64;
-#else
-	constexpr size_t component_row_count = ECS_COMPONENT_ROW_COUNT;
-#endif
-
 #ifndef ECS_BUCKET_SIZE
 	constexpr size_t bucket_size = 64;
 #else

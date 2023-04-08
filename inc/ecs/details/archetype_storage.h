@@ -54,7 +54,7 @@ namespace ecs
 				typedef component_matrix<_Components...> ComponentData;
 
 			private:
-				std::array<entity, config::component_row_count> _to_entity;
+				std::array<entity, config::bucket_size> _to_entity;
 				alignas(8) ComponentData _component_data;
 
 			public:
@@ -64,7 +64,7 @@ namespace ecs
 
 				constexpr const ComponentData& components() const;
 
-				constexpr const std::array<entity, config::component_row_count>& entities() const;
+				constexpr const std::array<entity, config::bucket_size>& entities() const;
 
 				template<typename _T>
 				constexpr component_row<_T>& get();

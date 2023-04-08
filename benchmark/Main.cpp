@@ -48,7 +48,7 @@ int main()
 	ecs::world world;
 	//FillWorld(world);
 
-	std::vector<std::array<Esteem::Two, ecs::config::component_row_count>*> base1;
+	std::vector<std::array<Esteem::Two, ecs::config::bucket_size>*> base1;
 	std::vector<ecs::details::archetype_storage<Esteem::Two>::bucket*> base2;
 	std::vector<ecs::details::archetype_storage<Esteem::Zero>::bucket*> base0;
 	std::vector<void*> base0void_;

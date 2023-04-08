@@ -8,7 +8,7 @@ namespace ecs::details
 	struct component_row
 	{
 	public:
-		_T _elements[config::component_row_count];
+		_T _elements[config::bucket_size];
 	};
 
 	template<typename... _Components>
