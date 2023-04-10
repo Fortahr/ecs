@@ -2,7 +2,6 @@
 
 #include "world.h"
 
-#include <array>
 #include <vector>
 #include <memory>
 #include <queue>
@@ -23,7 +22,7 @@ namespace ecs
 		if (_world_index_queue.empty())
 		{
 			_world_index = uint8_t(_worlds.size());
-			assert(_world_index < (1 << entity::world_bits));
+			assert(_world_index < (1 << config::world_bits));
 			_worlds.emplace_back(this);
 		}
 		else
@@ -51,7 +50,7 @@ namespace ecs
 
 		return _archetypes.emplace_back().initialize<_Components...>();
 	}
-		
+
 	template<typename... _Components>
 	inline entity world::emplace_entity()
 	{
@@ -75,7 +74,7 @@ namespace ecs
 		auto& storage = emplace_archetype<_Components...>();
 		auto storage_index = storage.emplace(entity(entity_version, entity_id, _world_index));
 
-		mapping.set((details::archetype_storage<>*)&storage, storage_index);
+		mapping.set((details::archetype_storage<>*) & storage, storage_index);
 
 		return entity(entity_id, entity_version, _world_index);
 	}
@@ -103,7 +102,7 @@ namespace ecs
 		auto& storage = emplace_archetype<_Components...>();
 		auto storage_index = storage.emplace({ entity_version, entity_id }, std::forward<_Components>(move)...);
 
-		mapping.set((details::archetype_storage<64>*) & storage, storage_index);
+		mapping.set((details::archetype_storage<>*) & storage, storage_index);
 
 		return entity(entity_id, entity_version, _world_index);
 	}
@@ -175,7 +174,7 @@ namespace ecs
 			const uintptr_t componentStart = uintptr_t(&(*bucket)->components());
 			for (size_t i = 0; i < config::bucket_size; ++i)
 				func(conditional_v<std::is_same_v<_Components, entity>, const entity, _Components>(
-					(*bucket)->entities()[i],
+					(*bucket)->get_entity(i),
 					reinterpret_cast<std::decay_t<_Components>*>(componentStart + position[_Indices])[i])
 					...);
 		}
@@ -184,7 +183,7 @@ namespace ecs
 		const uintptr_t componentStart = uintptr_t(&(*bucket)->components());
 		for (size_t i = 0; i < lastbucketSize; ++i)
 			func(conditional_v<std::is_same_v<_Components, entity>, const entity, _Components>(
-				(*bucket)->entities()[i],
+				(*bucket)->get_entity(i),
 				reinterpret_cast<std::decay_t<_Components>*>(componentStart + position[_Indices])[i])
 				...);
 	}

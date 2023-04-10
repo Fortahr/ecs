@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <vector>
 #include <tuple>
 #include <utility>
@@ -54,7 +53,7 @@ namespace ecs
 				typedef component_matrix<_Components...> ComponentData;
 
 			private:
-				std::array<entity, config::bucket_size> _to_entity;
+				entity _to_entity[config::bucket_size];
 				alignas(8) ComponentData _component_data;
 
 			public:
@@ -64,7 +63,7 @@ namespace ecs
 
 				constexpr const ComponentData& components() const;
 
-				constexpr const std::array<entity, config::bucket_size>& entities() const;
+				constexpr const entity& get_entity(size_t index) const;
 
 				template<typename _T>
 				constexpr component_row<_T>& get();
@@ -114,7 +113,7 @@ namespace ecs
 			void initialize_component_offset();
 
 		public:
-			template<typename... _Cs, typename = std::enable_if_t<(sizeof...(_Components) == 0)>>
+			template<typename... _Cs, std::enable_if_t<(sizeof...(_Cs) > 0), size_t> = 0>
 			static std::pair<uint32_t, uint32_t> remove_generic(archetype_storage& storage, size_t index, ecs::registry<_Cs...>);
 
 			archetype_storage();
@@ -136,7 +135,7 @@ namespace ecs
 
 			uint32_t emplace(entity entity);
 
-			template<typename = std::enable_if_t<(sizeof...(_Components) > 0)>>
+			template<size_t _CSize = sizeof...(_Components), typename = std::enable_if_t<(_CSize > 0)>>
 			uint32_t emplace(entity entity, _Components&&... move);
 
 			// erases entity at given index, returns the entity that took its place

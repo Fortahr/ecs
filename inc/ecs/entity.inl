@@ -2,10 +2,6 @@
 
 #include "entity.h"
 
-#if !__has_include("world.h")
-#include "world.h"
-#endif
-
 namespace ecs
 {
 	entity::entity(uint32_t id, uint32_t version, uint8_t world)
@@ -23,11 +19,13 @@ namespace ecs
 	{
 	}
 
+#if ENABLE_ENTITY_GET
 	template<typename _T>
 	inline _T* entity::get()
 	{
 		return world::get_entity_component<_T>(*this);
 	}
+#endif
 
 	inline uint32_t entity::get_id()
 	{

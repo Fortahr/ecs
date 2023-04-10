@@ -4,6 +4,8 @@
 
 namespace ecs
 {
+	class entity;
+
 	template<typename... _Components>
 	class registry
 	{

@@ -4,6 +4,11 @@
 
 #include "config.h"
 
+#if !__has_include("world.h")
+#include "world.h"
+#define ENABLE_ENTITY_GET true
+#endif
+
 namespace ecs
 {
 	class world;
@@ -38,8 +43,10 @@ namespace ecs
 	public:
 		entity();
 
+#if ENABLE_ENTITY_GET
 		template<typename _T>
 		_T* get();
+#endif
 
 		uint32_t get_id();
 
@@ -54,3 +61,5 @@ namespace ecs
 }
 
 #include "entity.inl"
+
+#undef ENABLE_ENTITY_GET

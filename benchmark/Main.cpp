@@ -1,4 +1,5 @@
 #include <iostream>
+#include <array>
 #include <tuple>
 #include <chrono>
 #include <functional>

@@ -20,9 +20,10 @@ namespace ecs::details
 	}
 
 	template<typename... _Components>
-	constexpr const std::array<entity, config::bucket_size>& archetype_storage<_Components...>::bucket::entities() const
+	constexpr const entity& archetype_storage<_Components...>::bucket::get_entity(size_t index) const
 	{
-		return _to_entity;
+		assert(index < config::bucket_size);
+		return _to_entity[index];
 	}
 
 	template<typename... _Components>
@@ -99,7 +100,7 @@ namespace ecs::details
 	}
 
 	template<typename... _Components>
-	template<typename... _Cs, typename>
+	template<typename... _Cs, std::enable_if_t<(sizeof...(_Cs) > 0), size_t>>
 	inline std::pair<uint32_t, uint32_t> archetype_storage<_Components...>::remove_generic(archetype_storage& storage, size_t index, ecs::registry<_Cs...>)
 	{
 		size_t toIndex = index % config::bucket_size;
@@ -226,7 +227,7 @@ namespace ecs::details
 	}
 
 	template<typename... _Components>
-	template<typename>
+	template<size_t _CSize, typename>
 	inline uint32_t archetype_storage<_Components...>::emplace(entity entity, _Components&&... move)
 	{
 		size_t size = _entity_count++;
