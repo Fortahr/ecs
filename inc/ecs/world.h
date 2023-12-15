@@ -1,6 +1,5 @@
 #pragma once
 
-#include <list>
 #include <vector>
 #include <memory>
 #include <queue>
@@ -8,25 +7,66 @@
 #include "registry.h"
 #include "config.h"
 #include "details/archetype_storage.h"
+#include "details/fixed_vector.h"
 
 namespace ecs
 {
 	class world
 	{
-	private:
-		std::list<details::archetype_storage<>> _archetypes;
-		uint32_t _entity_max = 0;
+	public:
+		using world_store_type = std::conditional_t<ecs::config::world_inheritable, world*, world>;
 
+		using world_index_type = 
+			std::conditional_t<ecs::config::world_bits <= 8, uint8_t,
+			std::conditional_t<ecs::config::world_bits <= 16, uint16_t,
+			std::conditional_t<ecs::config::world_bits <= 32, uint32_t,
+			uint64_t>>>;
+
+	private:
+		struct private_allocator : std::allocator<world>
+		{
+			template <typename _T> struct rebind { typedef private_allocator other; };
+
+			template <typename _T, typename... _Args>
+			static inline void construct(_T* ptr, _Args&&... args) { ::new ((void*)ptr) _T(std::forward<_Args>(args)...); }
+		};
+
+		using world_vector = std::conditional_t<ecs::config::world_fixed_vector != 0,
+			details::fixed_vector<world_store_type, ecs::config::world_fixed_vector, private_allocator>,
+			std::vector<world_store_type, private_allocator>>;
+
+		using archetype_vector = std::conditional_t<ecs::config::archetype_fixed_vector != 0,
+			details::fixed_vector<details::archetype_storage<>, ecs::config::archetype_fixed_vector>,
+			std::vector<details::archetype_storage<>>>;
+
+		static world_vector _worlds;
+		static std::queue<world_index_type> _world_index_queue;
+
+
+	private:
+		archetype_vector _archetypes;
+		uint32_t _entity_max = 0;
 		uint8_t _world_index;
-		static std::vector<world*> _worlds;
-		static std::queue<uint8_t> _world_index_queue;
 
 		std::vector<details::entity_target> _entity_mapping;
 		std::queue<uint32_t> _entity_mapping_queue;
+				
+		template <typename _Res>
+		static _Res create_world_internal();
+
+		template <typename = std::enable_if_t<!ecs::config::world_inheritable>>
+		world(world_index_type index);
 
 	public:
+		template <typename = std::enable_if_t<ecs::config::world_inheritable>>
 		world();
+
+		template <typename = std::enable_if_t<ecs::config::world_inheritable>>
+		world(world&& move);
+
 		~world();
+
+		static std::conditional_t<ecs::config::world_inheritable, world, world&> create_world();
 
 		template<typename... _Components>
 		details::archetype_storage<_Components...>& emplace_archetype();

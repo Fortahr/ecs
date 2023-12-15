@@ -78,7 +78,9 @@ int main()
 
 	Benchmarker::print_header();
 
-	ecs::world world;
+
+	//ecs::world world;
+	decltype(ecs::world::create_world()) world = ecs::world::create_world();
 	//FillWorld(world);
 	//world.reserve_entities<Zero, One, Two, Three>(10'000'000);
 	//world.reserve_entities<Three, Four, Five>(10'000'000);

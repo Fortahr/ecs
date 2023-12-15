@@ -14,14 +14,21 @@
 
 namespace ecs
 {
-	inline std::vector<world*> world::_worlds;
-	inline std::queue<uint8_t> world::_world_index_queue;
+	inline decltype(world::_worlds) world::_worlds;
+	inline decltype(world::_world_index_queue) world::_world_index_queue;
 
+	template <typename>
+	world::world(world_index_type index)
+		: _world_index(index)
+	{
+	}
+
+	template <typename>
 	world::world()
 	{
 		if (_world_index_queue.empty())
 		{
-			_world_index = uint8_t(_worlds.size());
+			_world_index = world_index_type(_worlds.size());
 			assert(_world_index < (1 << config::world_bits));
 			_worlds.emplace_back(this);
 		}
@@ -33,6 +40,51 @@ namespace ecs
 		}
 	}
 
+	template <typename>
+	world::world(world&& move)
+		: _archetypes(std::move(move._archetypes))
+		, _entity_max(std::move(move._entity_max))
+		, _world_index(std::move(move._world_index))
+		, _entity_mapping(std::move(move._entity_mapping))
+		, _entity_mapping_queue(std::move(move._entity_mapping_queue))
+	{
+		if constexpr (ecs::config::world_inheritable)
+			_worlds[_world_index] = this;
+	}
+
+	template <typename _Res>
+	static _Res world::create_world_internal()
+	{
+		if constexpr (std::is_same_v<_Res, world>)
+			return world();
+		else
+		{
+			if (_world_index_queue.empty())
+			{
+				auto index = world_index_type(_worlds.size());
+				assert(index < (1 << config::world_bits));
+
+				return _worlds.emplace_back(index);
+			}
+			else
+			{
+				auto index = _world_index_queue.front();
+				_world_index_queue.pop();
+
+				auto& w = _worlds[index];
+				w.~world();
+				new (&w) world(index);
+
+				return w;
+			}
+		}
+	}
+
+	std::conditional_t<ecs::config::world_inheritable, world, world&> world::create_world()
+	{
+		return create_world_internal<std::conditional_t<ecs::config::world_inheritable, world, world&>>();
+	}
+
 	world::~world()
 	{
 		_world_index_queue.push(_world_index);
@@ -41,7 +93,7 @@ namespace ecs
 	template<typename... _Components>
 	inline details::archetype_storage<_Components...>& world::emplace_archetype()
 	{
-		constexpr auto bitmask = config::Registry::template bit_mask_of<_Components...>();
+		constexpr auto bitmask = config::registry::template bit_mask_of<_Components...>();
 		for (auto& archetype : _archetypes)
 		{
 			if (archetype.component_mask() == bitmask)
@@ -186,7 +238,7 @@ namespace ecs
 	template<typename _Func, typename... _Args>
 	__forceinline constexpr void world::apply_to_archetype_entities(_Func&& func, details::archetype_storage<>& archetype)
 	{
-		const std::array<uintptr_t, sizeof...(_Args)> position{(archetype.component_offset<config::Registry::template index_of<std::decay_t<_Args>>()>())...};
+		const std::array<uintptr_t, sizeof...(_Args)> position{(archetype.component_offset<config::registry::template index_of<std::decay_t<_Args>>()>())...};
 		const size_t lastbucketSize = archetype.size() % config::bucket_size;
 
 		auto* bucket = archetype.get_buckets().data();
@@ -206,7 +258,7 @@ namespace ecs
 		auto archetype = _archetypes.begin(), endArchetype = _archetypes.end();
 		for (; archetype != endArchetype; ++archetype)
 		{
-			if (config::Registry::template qualifies<_Args...>(archetype->component_mask(), ecs::pack<_Extra...>()))
+			if (config::registry::template qualifies<_Args...>(archetype->component_mask(), ecs::pack<_Extra...>()))
 				apply_to_archetype_entities<_Func, _Args...>(std::forward<_Func>(func), *archetype);
 		}
 	}
@@ -240,7 +292,7 @@ namespace ecs
 		auto archetype = _archetypes.begin(), endArchetype = _archetypes.end();
 		for (; archetype != endArchetype; ++archetype)
 		{
-			if (config::Registry::template qualifies<_Extra...>(archetype->component_mask()))
+			if (config::registry::template qualifies<_Extra...>(archetype->component_mask()))
 				count += archetype->size();
 		}
 

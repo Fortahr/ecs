@@ -117,9 +117,9 @@ namespace ecs::details
 
 			([&]()
 				{
-					if (config::Registry::template bit_mask_of<_Cs>() & storage.component_mask())
+					if (config::registry::template bit_mask_of<_Cs>() & storage.component_mask())
 					{
-						const size_t offset = storage.component_offset<config::Registry::template index_of<_Cs>()>();
+						const size_t offset = storage.component_offset<config::registry::template index_of<_Cs>()>();
 						auto& toComponent = reinterpret_cast<_Cs*>(uintptr_t(&to->components()) + offset)[toIndex];
 						auto& fromComponent = reinterpret_cast<_Cs*>(uintptr_t(&from->components()) + offset)[fromIndex];
 
@@ -132,9 +132,9 @@ namespace ecs::details
 
 		([&]()
 			{
-				if (config::Registry::template bit_mask_of<_Cs>() & storage.component_mask())
+				if (config::registry::template bit_mask_of<_Cs>() & storage.component_mask())
 				{
-					const size_t offset = storage.component_offset<config::Registry::template index_of<_Cs>()>();
+					const size_t offset = storage.component_offset<config::registry::template index_of<_Cs>()>();
 					auto& component = reinterpret_cast<_Cs*>(uintptr_t(&to->components()) + offset)[toIndex];
 
 					component.~_Cs();
@@ -151,7 +151,7 @@ namespace ecs::details
 		typedef component_row<_T> Row;
 		constexpr size_t offset = offsetof(_ComponentMatrix, Row::_elements) / config::bucket_size;
 		static_assert(offset < std::numeric_limits<uint16_t>::max(), "Component offset can no longer fit in uint16_t storage, consider upgrading to uint32_t.");
-		_component_offsets[config::Registry::template index_of<_T>()] = uint16_t(offset);
+		_component_offsets[config::registry::template index_of<_T>()] = uint16_t(offset);
 	}
 
 	template<typename... _Components>
@@ -159,7 +159,7 @@ namespace ecs::details
 	inline archetype_storage<_Cs...>& archetype_storage<_Components...>::initialize()
 	{
 		typedef component_matrix<_Cs...> ComponentMatrix;
-		_component_mask = config::Registry::template bit_mask_of<_Cs...>();
+		_component_mask = config::registry::template bit_mask_of<_Cs...>();
 
 		(initialize_component_offset<_Cs, ComponentMatrix>(), ...);
 
@@ -195,7 +195,7 @@ namespace ecs::details
 	template<typename _T>
 	inline _T* archetype_storage<_Components...>::get_component(entity_target entity) const
 	{
-		size_t offset = _component_offsets[config::Registry::template index_of<_T>()];
+		size_t offset = _component_offsets[config::registry::template index_of<_T>()];
 		if (offset != std::numeric_limits<uint16_t>::max())
 		{
 			size_t index = entity._index % config::bucket_size, bucketIndex = entity._index / config::bucket_size;
