@@ -51,8 +51,15 @@ namespace ecs
 	private:
 		bool get_entity(entity entity, details::entity_target& target);
 
-		template<typename... _Components, std::size_t... _Indices, class _Func>
-		constexpr void apply_to_archetype_entities(_Func&& func, details::archetype_storage<>& archetype, std::index_sequence<_Indices...>);
+
+		template<typename _Arg>
+		static constexpr auto& get_argument(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset);
+
+		template<typename _Func, typename... _Args>
+		static constexpr void apply_to_bucket_entities(_Func&& func, size_t count, const details::archetype_storage<>::bucket& bucket, const std::array<uintptr_t, sizeof...(_Args)>& position);
+
+		template<typename _Func, typename... _Args>
+		static constexpr void apply_to_archetype_entities(_Func&& func, details::archetype_storage<>& archetype);
 
 		template<typename _Func, typename... _Args, typename... _Extra>
 		void apply_to_qualifying_entities(_Func&& func, ecs::pack<_Extra...> = {});

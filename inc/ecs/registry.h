@@ -23,7 +23,7 @@ namespace ecs
 		constexpr static size_t bit_mask_of();
 
 		// Checks if components are within the archetype,
-		// includes will override excludes, e.g.: Transform overrides Not<Transform>.
+		// includes will override excludes, e.g.: C overrides exclude<C>.
 		template<typename... _Other, typename... _Extra>
 		constexpr static bool qualifies(size_t mask, pack<_Extra...> = {});
 	};

@@ -4,8 +4,10 @@
 
 namespace ecs
 {
-	// Exclude component from query, note that includes override excludes.
+	// Exclude component from query.
+	// Note that includes override excludes, e.g.: `world.query<ecs::exclude<C>>([](C& c) {});` will not exclude entities with type `C`
 	template<typename T> struct exclude {};
+	template<typename T> using ex = exclude<T>;
 
 	template<typename... _Ts> struct pack {};
 
@@ -16,13 +18,4 @@ namespace ecs
 	template<typename T> struct decay_exclude { using type = T; };
 	template<typename T> struct decay_exclude<exclude<T>> { using type = T; };
 	template<typename T> using decay_exclude_t = typename decay_exclude<T>::type;
-
-	template<bool _First, typename A, typename B>
-	constexpr std::conditional_t<_First, A, B>& conditional_v(A& a, B& b)
-	{
-		if constexpr (_First)
-			return a;
-		else
-			return b;
-	}
 }

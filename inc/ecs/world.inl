@@ -74,7 +74,7 @@ namespace ecs
 		auto& storage = emplace_archetype<_Components...>();
 		auto storage_index = storage.emplace(entity(entity_version, entity_id, _world_index));
 
-		mapping.set((details::archetype_storage<>*) & storage, storage_index);
+		mapping.set((details::archetype_storage<>*)&storage, storage_index);
 
 		return entity(entity_id, entity_version, _world_index);
 	}
@@ -156,38 +156,49 @@ namespace ecs
 			target = _entity_mapping[entity.get_id()];
 			return entity._equality == target._version;
 		}
-		else
-			return false;
+
+		return false;
 	}
-		
-	template<typename... _Components, std::size_t... _Indices, class _Func>
-	__forceinline constexpr void world::apply_to_archetype_entities(_Func&& func, details::archetype_storage<>& archetype, std::index_sequence<_Indices...>)
+
+	template<typename _Arg>
+	__forceinline constexpr auto& world::get_argument(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
 	{
-		const uintptr_t position[]{ (archetype.component_offset<config::Registry::template index_of<std::decay_t<_Components>>()>())... };
+		uintptr_t matrix = reinterpret_cast<uintptr_t>(&bucket.components());
+		return reinterpret_cast<std::decay_t<_Arg>*>(matrix + offset)[i];
+	}
+
+	template<>
+	__forceinline constexpr auto& world::get_argument<entity>(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
+	{
+		return bucket.get_entity(i);
+	}
+
+	template<typename _Func, typename... _Args>
+	__forceinline constexpr void world::apply_to_bucket_entities(_Func&& func, size_t count, const details::archetype_storage<>::bucket& bucket, const std::array<uintptr_t, sizeof...(_Args)>& position)
+	{
+		for (size_t i = 0; i < count; ++i)
+		{
+			size_t index = 0;
+			func(get_argument<_Args>(i, bucket, position[index++])...);
+		}
+	}
+
+	template<typename _Func, typename... _Args>
+	__forceinline constexpr void world::apply_to_archetype_entities(_Func&& func, details::archetype_storage<>& archetype)
+	{
+		const std::array<uintptr_t, sizeof...(_Args)> position{(archetype.component_offset<config::Registry::template index_of<std::decay_t<_Args>>()>())...};
 		const size_t lastbucketSize = archetype.size() % config::bucket_size;
 
 		auto* bucket = archetype.get_buckets().data();
 		const auto* endbucket = bucket + (archetype.size() / config::bucket_size);
 
 		for (; bucket < endbucket; ++bucket)
-		{
-			const uintptr_t componentStart = uintptr_t(&(*bucket)->components());
-			for (size_t i = 0; i < config::bucket_size; ++i)
-				func(conditional_v<std::is_same_v<_Components, entity>, const entity, _Components>(
-					(*bucket)->get_entity(i),
-					reinterpret_cast<std::decay_t<_Components>*>(componentStart + position[_Indices])[i])
-					...);
-		}
+			apply_to_bucket_entities<_Func, _Args...>(std::forward<_Func>(func), config::bucket_size, **bucket, position);
 
-		// won't run anything if it doesn't exist, as that'll run it `lastbucketSize` times, which will be 0
-		const uintptr_t componentStart = uintptr_t(&(*bucket)->components());
-		for (size_t i = 0; i < lastbucketSize; ++i)
-			func(conditional_v<std::is_same_v<_Components, entity>, const entity, _Components>(
-				(*bucket)->get_entity(i),
-				reinterpret_cast<std::decay_t<_Components>*>(componentStart + position[_Indices])[i])
-				...);
+		// apply to the remaining in our last bucket, if it doesn't exist then `lastbucketSize` will be 0 and we won't run anything
+		apply_to_bucket_entities<_Func, _Args...>(std::forward<_Func>(func), lastbucketSize, **bucket, position);
 	}
-		
+	
 	template<typename _Func, typename... _Args, typename... _Extra>
 	inline void world::apply_to_qualifying_entities(_Func&& func, ecs::pack<_Extra...>)
 	{
@@ -196,7 +207,7 @@ namespace ecs
 		for (; archetype != endArchetype; ++archetype)
 		{
 			if (config::Registry::template qualifies<_Args...>(archetype->component_mask(), ecs::pack<_Extra...>()))
-				apply_to_archetype_entities<_Args...>(func, *archetype, std::make_index_sequence<sizeof...(_Args)>());
+				apply_to_archetype_entities<_Func, _Args...>(std::forward<_Func>(func), *archetype);
 		}
 	}
 	

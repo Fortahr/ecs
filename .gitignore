@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Project/build files
+bin/
+build/
+root/
+ignore/

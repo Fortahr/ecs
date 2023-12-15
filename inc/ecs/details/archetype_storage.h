@@ -105,9 +105,9 @@ namespace ecs
 			size_t _entity_count = 0;
 			std::vector<bucket*> _buckets;
 
-			std::pair<uint32_t, uint32_t>(*removeOperation)(archetype_storage& storage, size_t index) = &remove;
+			std::pair<uint32_t, uint32_t> remove(size_t index);
 
-			static std::pair<uint32_t, uint32_t> remove(archetype_storage& storage, size_t index);
+			decltype(&archetype_storage::remove) removeOperation = &archetype_storage::remove;
 
 			template<typename _T, typename _ComponentMatrix>
 			void initialize_component_offset();

@@ -75,23 +75,23 @@ namespace ecs::details
 	}
 
 	template<typename... _Components>
-	inline std::pair<uint32_t, uint32_t> archetype_storage<_Components...>::remove(archetype_storage& storage, size_t index)
+	inline std::pair<uint32_t, uint32_t> archetype_storage<_Components...>::remove(size_t index)
 	{
 		size_t toIndex = index % config::bucket_size;
-		bucket* to = (bucket*)storage._buckets[index / config::bucket_size];
+		bucket* to = (bucket*)this->_buckets[index / config::bucket_size];
 
-		if (storage._entity_count > 0)
+		if (this->_entity_count > 0)
 		{
-			size_t fromIndex = storage._entity_count % config::bucket_size;
-			size_t fromBucketIndex = storage._entity_count / config::bucket_size;
-			bucket* from = (bucket*)storage._buckets[fromBucketIndex];
+			size_t fromIndex = this->_entity_count % config::bucket_size;
+			size_t fromBucketIndex = this->_entity_count / config::bucket_size;
+			bucket* from = (bucket*)this->_buckets[fromBucketIndex];
 
 			entity replaced = to->_to_entity[toIndex] = from->_to_entity[fromIndex];
 			from->_to_entity[fromIndex].invalidate();
 
 			((to->get<_Components>()[toIndex] = std::move(from->get<_Components>()[fromIndex])), ...);
 
-			return { replaced.get_id(), uint32_t(fromIndex + fromBucketIndex * config::bucket_size)};
+			return { replaced.get_id(), uint32_t(fromIndex + fromBucketIndex * config::bucket_size) };
 		}
 
 		((to->get<_Components>()[index].~_Components()), ...);
@@ -116,7 +116,7 @@ namespace ecs::details
 			from->toEntity[fromIndex].remove();
 
 			([&]()
-				{					
+				{
 					if (config::Registry::template bit_mask_of<_Cs>() & storage.component_mask())
 					{
 						const size_t offset = storage.component_offset<config::Registry::template index_of<_Cs>()>();
@@ -127,7 +127,7 @@ namespace ecs::details
 					}
 				}(), ...);
 
-			return { replaced.get_id(), uint32_t(fromIndex + fromBucketIndex * config::bucket_size)};
+			return { replaced.get_id(), uint32_t(fromIndex + fromBucketIndex * config::bucket_size) };
 		}
 
 		([&]()
@@ -250,8 +250,8 @@ namespace ecs::details
 		if (index < _entity_count)
 		{
 			--_entity_count;
-			
-			return removeOperation(*this, index);
+
+			return (this->*removeOperation)(index);
 		}
 	}
 
