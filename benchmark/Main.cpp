@@ -72,6 +72,24 @@ void benchmark_counting(ecs::world& world, std::string_view name)
 	std::cout << '\n';
 }
 
+void test_entity_erasure(ecs::world& world)
+{
+	size_t p = 0, r = 0;
+
+	world.query([&](ecs::erasable<Entity> entity) -> void
+		{
+			++p;
+
+			if (!entity.valid())
+				std::cout << "wut\n";
+
+			if (entity.get_id() % 2 && world.erase_entity(entity))
+				++r;
+		});
+
+	std::cout << p << " -> " << r << '\n';
+}
+
 int main()
 {
 	setlocale(LC_CTYPE, "");
@@ -96,6 +114,8 @@ int main()
 	emplace_entities<Two, Four, Five>(world, 10'000'000);
 	emplace_entities<Three, Six>(world, 10'000'000);
 	emplace_entities<Zero>(world, 10'000'000);
+
+	test_entity_erasure(world);
 
 	std::chrono::high_resolution_clock::time_point start, end;
 
@@ -179,6 +199,27 @@ int main()
 			},
 			world.count<Zero>()
 		);
+
+		Benchmarker::benchmark("  ECS query entity", [&]
+			{
+				world.query([](Zero& zero, Entity) -> void
+					{
+						zero.data *= zero.data;
+					});
+			},
+			world.count<Zero>()
+		);
+
+		Benchmarker::benchmark("  ECS query erasable", [&]
+			{
+				world.query([](Zero& zero, ecs::erasable<Entity>) -> void
+					{
+						zero.data *= zero.data;
+					});
+			},
+			world.count<Zero>()
+		);
+
 	}
 	std::cout << '\n';
 
@@ -242,4 +283,5 @@ int main()
 	benchmark_counting<Three>(world, "(Three) counting");
 	benchmark_counting<Three, ecs::exclude<One>>(world, "(Three, !One) counting");
 	benchmark_counting<Entity>(world, "(Entity) counting");
+	benchmark_counting<ecs::erasable<Entity>>(world, "(Entity) counting erasable");
 }

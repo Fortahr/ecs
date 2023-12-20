@@ -100,22 +100,22 @@ namespace ecs
 			size_t _component_mask = 0;
 
 			// stored as `offset / _Size` removing unused precision
-			uint16_t _component_offsets[std::numeric_limits<size_t>::digits];
+			uint16_t _component_offsets[ecs::config::registry::size()];
 
 			size_t _entity_count = 0;
-			std::vector<bucket*> _buckets;
+			std::vector<std::unique_ptr<bucket>> _buckets;
 
-			std::pair<uint32_t, uint32_t> remove(size_t index);
+			uint32_t remove(size_t index);
 
 			decltype(&archetype_storage::remove) removeOperation = &archetype_storage::remove;
+
+			template<typename _T>
+			static void move_and_destruct(_T& to, _T&& from);
 
 			template<typename _T, typename _ComponentMatrix>
 			void initialize_component_offset();
 
 		public:
-			template<typename... _Cs, std::enable_if_t<(sizeof...(_Cs) > 0), size_t> = 0>
-			static std::pair<uint32_t, uint32_t> remove_generic(archetype_storage& storage, size_t index, ecs::registry<_Cs...>);
-
 			archetype_storage();
 
 			template<typename... _Cs>
@@ -139,10 +139,13 @@ namespace ecs
 			uint32_t emplace(entity entity, _Components&&... move);
 
 			// erases entity at given index, returns the entity that took its place
-			std::pair<uint32_t, uint32_t> erase(size_t index);
+			uint32_t erase(size_t index);
+
+			template<typename... _Cs, typename = std::enable_if_t<(sizeof...(_Cs) > 0)>>
+			static uint32_t remove_generic(archetype_storage& storage, size_t index, ecs::registry<_Cs...>);
 
 			//void reserve(size_t size);
-			const std::vector<bucket*>& get_buckets() const;
+			const std::vector<std::unique_ptr<bucket>>& get_buckets() const;
 		};
 	}
 }

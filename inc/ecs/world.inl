@@ -124,9 +124,9 @@ namespace ecs
 		auto entity_version = mapping._version;
 
 		auto& storage = emplace_archetype<_Components...>();
-		auto storage_index = storage.emplace(entity(entity_version, entity_id, _world_index));
+		auto storage_index = storage.emplace(entity(entity_id, entity_version, _world_index));
 
-		mapping.set((details::archetype_storage<>*)&storage, storage_index);
+		mapping.set(reinterpret_cast<details::archetype_storage<>*>(&storage), storage_index);
 
 		return entity(entity_id, entity_version, _world_index);
 	}
@@ -154,27 +154,34 @@ namespace ecs
 		auto& storage = emplace_archetype<_Components...>();
 		auto storage_index = storage.emplace({ entity_version, entity_id }, std::forward<_Components>(move)...);
 
-		mapping.set((details::archetype_storage<>*) & storage, storage_index);
+		mapping.set((details::archetype_storage<>*)&storage, storage_index);
 
 		return entity(entity_id, entity_version, _world_index);
 	}
 		
-	inline void world::erase_entity(entity entity)
+	inline bool world::erase_entity(entity entity)
 	{
 		details::entity_target entity_reference;
 		if (get_entity(entity, entity_reference))
 		{
-			auto replaced = entity_reference._archetype->erase(entity_reference._index);
-
-			entity_reference.invalidate();
 			_entity_mapping_queue.push(entity.get_id());
+			_entity_mapping[entity.get_id()].invalidate();
 
-			if (replaced.first != entity::npos)
+			auto replaced = entity_reference._archetype->erase(entity_reference._index);
+			if (replaced != entity::npos)
 			{
-				_entity_mapping[replaced.first].move(replaced.second);
-				_entity_mapping[replaced.second].invalidate();
+				_entity_mapping[replaced].move(entity_reference._index);
+
 			}
+			else
+			{
+				std::cout << "WTF\n";
+			}
+
+			return true;
 		}
+
+		return false;
 	}
 
 	/*template<typename... _Components>
@@ -213,25 +220,34 @@ namespace ecs
 	}
 
 	template<typename _Arg>
-	__forceinline constexpr auto& world::get_argument(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
+	__forceinline constexpr auto&& world::forward_argument(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
 	{
 		uintptr_t matrix = reinterpret_cast<uintptr_t>(&bucket.components());
 		return reinterpret_cast<std::decay_t<_Arg>*>(matrix + offset)[i];
 	}
 
 	template<>
-	__forceinline constexpr auto& world::get_argument<entity>(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
+	__forceinline constexpr auto&& world::forward_argument<entity>(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
 	{
 		return bucket.get_entity(i);
 	}
+
+	template<>
+	__forceinline constexpr auto&& world::forward_argument<erasable<entity>>(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
+	{
+		return static_cast<const erasable<entity>&>(bucket.get_entity(i));
+	}
+
+	template<>
+	auto&& world::forward_argument<entity&>(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset) = delete;
 
 	template<typename _Func, typename... _Args>
 	__forceinline constexpr void world::apply_to_bucket_entities(_Func&& func, size_t count, const details::archetype_storage<>::bucket& bucket, const std::array<uintptr_t, sizeof...(_Args)>& position)
 	{
 		for (size_t i = 0; i < count; ++i)
 		{
-			size_t index = 0;
-			func(get_argument<_Args>(i, bucket, position[index++])...);
+			size_t p = 0;
+			func(forward_argument<_Args>(i, bucket, position[p++])...);
 		}
 	}
 
@@ -251,6 +267,28 @@ namespace ecs
 		apply_to_bucket_entities<_Func, _Args...>(std::forward<_Func>(func), lastbucketSize, **bucket, position);
 	}
 	
+	template<typename _Func, typename... _Args>
+	__forceinline constexpr void world::apply_to_archetype_entities_erasable(_Func&& func, details::archetype_storage<>& archetype)
+	{
+		const std::array<uintptr_t, sizeof...(_Args)> position{ (archetype.component_offset<config::registry::template index_of<std::decay_t<_Args>>()>())... };
+		size_t count = archetype.size();
+
+		for (auto& bucket : archetype.get_buckets())
+		{
+			for (size_t i = 0; i < config::bucket_size && count != 0; --count)
+			{
+				const entity& ent = bucket->get_entity(i);
+				auto prevId = ent.get_id();
+
+				size_t p = 0;
+				func(forward_argument<_Args>(i, *bucket, position[p++])...);
+
+				if (prevId == ent.get_id())
+					++i;
+			}
+		}
+	}
+
 	template<typename _Func, typename... _Args, typename... _Extra>
 	inline void world::apply_to_qualifying_entities(_Func&& func, ecs::pack<_Extra...>)
 	{
@@ -259,7 +297,12 @@ namespace ecs
 		for (; archetype != endArchetype; ++archetype)
 		{
 			if (config::registry::template qualifies<_Args...>(archetype->component_mask(), ecs::pack<_Extra...>()))
-				apply_to_archetype_entities<_Func, _Args...>(std::forward<_Func>(func), *archetype);
+			{
+				if constexpr (requires_erasable_query_v<_Args...>)
+					apply_to_archetype_entities_erasable<_Func, _Args...>(std::forward<_Func>(func), *archetype);
+				else
+					apply_to_archetype_entities<_Func, _Args...>(std::forward<_Func>(func), *archetype);
+			}
 		}
 	}
 	

@@ -3,10 +3,12 @@
 #include <vector>
 #include <memory>
 #include <queue>
+#include <unordered_map>
 
 #include "registry.h"
 #include "config.h"
 #include "details/archetype_storage.h"
+#include "details/bucket_vector.h"
 #include "details/fixed_vector.h"
 
 namespace ecs
@@ -37,7 +39,7 @@ namespace ecs
 
 		using archetype_vector = std::conditional_t<ecs::config::archetype_fixed_vector != 0,
 			details::fixed_vector<details::archetype_storage<>, ecs::config::archetype_fixed_vector>,
-			std::vector<details::archetype_storage<>>>;
+			details::bucket_vector<details::archetype_storage<>, 32>>;
 
 		static world_vector _worlds;
 		static std::queue<world_index_type> _world_index_queue;
@@ -77,7 +79,7 @@ namespace ecs
 		template<typename... _Components, typename = std::enable_if_t<(sizeof...(_Components) > 0)>>
 		entity emplace_entity(_Components&&... move);
 
-		void erase_entity(entity entity);
+		bool erase_entity(entity entity);
 
 		/*template<typename... _Components>
 		inline void reserve_entities(size_t size);*/
@@ -91,15 +93,17 @@ namespace ecs
 	private:
 		bool get_entity(entity entity, details::entity_target& target);
 
-
 		template<typename _Arg>
-		static constexpr auto& get_argument(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset);
+		static constexpr auto&& forward_argument(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset);
 
 		template<typename _Func, typename... _Args>
 		static constexpr void apply_to_bucket_entities(_Func&& func, size_t count, const details::archetype_storage<>::bucket& bucket, const std::array<uintptr_t, sizeof...(_Args)>& position);
 
 		template<typename _Func, typename... _Args>
 		static constexpr void apply_to_archetype_entities(_Func&& func, details::archetype_storage<>& archetype);
+
+		template<typename _Func, typename... _Args>
+		static constexpr void apply_to_archetype_entities_erasable(_Func&& func, details::archetype_storage<>& archetype);
 
 		template<typename _Func, typename... _Args, typename... _Extra>
 		void apply_to_qualifying_entities(_Func&& func, ecs::pack<_Extra...> = {});

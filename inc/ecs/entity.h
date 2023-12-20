@@ -38,23 +38,23 @@ namespace ecs
 		static constexpr uint32_t npos = ~0;
 
 	private:
-		entity(uint32_t id, uint32_t version, uint8_t world);
+		constexpr entity(uint32_t id, uint32_t version, uint8_t world);
 
 	public:
-		entity();
+		constexpr entity();
 
 #if ENABLE_ENTITY_GET
 		template<typename _T>
 		_T* get();
 #endif
 
-		uint32_t get_id();
+		uint32_t get_id() const;
 
-		uint32_t get_version();
+		uint32_t get_version() const;
 
-		uint8_t get_world();
+		uint8_t get_world() const;
 
-		bool valid();
+		bool valid() const;
 
 		void invalidate();
 	};

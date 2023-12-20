@@ -93,7 +93,7 @@ Test                        Count       Median         Mean       StdDev       C
   ECS query                   50M      0.13133      0.13142      0.00375      0.00108
   ECS count                   50M      0.00000      0.00000      0.00000      0.00000
 
-\* values are given in nanosecond, calculated as: totalTime / Count.
+* values are given in nanoseconds, calculated as: totalTime / Count.
 ```
 
 # WIP

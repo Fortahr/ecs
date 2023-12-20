@@ -32,7 +32,7 @@ namespace ecs::details
 		template <typename... _Args>
 		_T& emplace_back(_Args&&... arguments);
 
-		_T& push_back(const _T&& copy);
+		_T& push_back(const _T& copy);
 
 		_T* begin();
 		_T* end();
@@ -102,7 +102,7 @@ namespace ecs::details
 	}
 
 	template <typename _T, size_t _Capacity, typename _Alloc>
-	inline _T& fixed_vector<_T, _Capacity, _Alloc>::push_back(const _T&& copy)
+	inline _T& fixed_vector<_T, _Capacity, _Alloc>::push_back(const _T& copy)
 	{
 		if (_size >= _Capacity)
 			throw std::out_of_range("Can't push element, size >= capacity");

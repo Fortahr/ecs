@@ -6,10 +6,16 @@
 namespace ecs
 {
 	template<typename... _Components>
+	constexpr size_t registry<_Components...>::size()
+	{
+		return sizeof...(_Components);
+	}
+
+	template<typename... _Components>
 	template<typename _T, typename>
 	constexpr uint8_t registry<_Components...>::index_of()
 	{
-		if constexpr (std::is_same_v<_T, entity>)
+		if constexpr (is_entity_v<_T>)
 			return 0; // allow, but ignore
 
 		uint8_t index = 0;
@@ -21,7 +27,7 @@ namespace ecs
 	template<typename _T>
 	constexpr size_t registry<_Components...>::bit_mask_of()
 	{
-		if constexpr (std::is_same_v<_T, entity> || is_exclude_v<_T>)
+		if constexpr (is_entity_v<_T> || is_exclude_v<_T>)
 			return 0; // allow, but ignore
 		else
 			return 1ull << index_of<_T>();
