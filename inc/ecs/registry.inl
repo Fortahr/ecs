@@ -25,6 +25,13 @@ namespace ecs
 
 	template<typename... _Components>
 	template<typename _T>
+	constexpr bool registry<_Components...>::contains()
+	{
+		return std::disjunction_v<std::is_same<_T, _Components>...>;
+	}
+
+	template<typename... _Components>
+	template<typename _T>
 	constexpr size_t registry<_Components...>::bit_mask_of()
 	{
 		if constexpr (is_entity_v<_T> || is_exclude_v<_T>)

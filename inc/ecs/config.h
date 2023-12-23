@@ -37,5 +37,6 @@ namespace ecs::config
 	constexpr size_t archetype_fixed_vector = 0;
 
 	// Checks
+	static_assert(bucket_size != 0 && (bucket_size & (bucket_size - 1)) == 0, "bucket_size must be a power of 2");
 	static_assert(world_fixed_vector < (1 << world_bits), "world_fixed_vector must fit within an integer of size world_bits");
 }

@@ -89,9 +89,6 @@ namespace ecs::details
 			friend class bucket_vector;
 
 		private:
-			bucket_t* _bucket;
-			size_t _index;
-
 			iterator(bucket_t* bucket, size_t index)
 				: const_iterator(bucket, index)
 			{
@@ -274,7 +271,7 @@ namespace ecs::details
 		{
 			destruct(bucket->_data[0]);
 
-			for (size_t i = 1; i <= size; ++i)
+			for (size_t i = 1; i < size; ++i)
 				destruct(bucket->_data[i]);
 
 			delete bucket;

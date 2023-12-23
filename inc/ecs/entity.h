@@ -13,9 +13,15 @@ namespace ecs
 {
 	class world;
 
+	namespace details
+	{
+		template<typename...> class archetype_storage;
+	}
+
 	class entity
 	{
 		friend class world;
+		template<typename...> friend class details::archetype_storage;
 
 	private:
 		union
@@ -40,6 +46,8 @@ namespace ecs
 	private:
 		constexpr entity(uint32_t id, uint32_t version, uint8_t world);
 
+		void invalidate();
+
 	public:
 		constexpr entity();
 
@@ -55,9 +63,9 @@ namespace ecs
 		uint8_t get_world() const;
 
 		bool valid() const;
-
-		void invalidate();
 	};
+
+	static_assert(sizeof(entity) == sizeof(uint64_t));
 }
 
 #include "entity.inl"

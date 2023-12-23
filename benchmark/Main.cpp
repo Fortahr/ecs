@@ -4,6 +4,7 @@
 #include <chrono>
 #include <functional>
 #include <deque>
+#include <sstream>
 
 #include <ecs/world.h>
 
@@ -46,82 +47,93 @@ void emplace_entities(ecs::world& world, size_t size)
 template <typename... Components>
 void benchmark_counting(ecs::world& world, std::string_view name)
 {
-	std::cout << name << "\n";
-	{
-		size_t processed = 0;
+	size_t processed = 0;
 
-		Benchmarker::benchmark("  ECS query", [&]
+	Benchmarker::benchmark(name,
+		Benchmarker::sub_run{ "ECS query", [&]
 			{
 				processed = 0;
 
 				world.query<Components...>([&processed]() -> void
-					{
-						processed++;
-					});
+				{
+					processed++;
+				});
 			},
 			processed
-		);
-
-		Benchmarker::benchmark("  ECS count", [&]
+		},
+		Benchmarker::sub_run{ "ECS count", [&]
 			{
 				processed = world.count<Components...>();
 			},
 			processed
-		);
-	}
-	std::cout << '\n';
+		}
+	);
 }
 
 void test_entity_erasure(ecs::world& world)
 {
 	size_t p = 0, r = 0;
 
-	world.query([&](ecs::erasable<Entity> entity) -> void
+	Benchmarker::benchmark<1>("Removing entities", [&]
+	{
+		world.query_mutable([&](ecs::entity entity) -> void
 		{
-			++p;
-
-			if (!entity.valid())
+			if (!entity.valid() || p >= 50'000'000)
 				std::cout << "wut\n";
 
 			if (entity.get_id() % 2 && world.erase_entity(entity))
 				++r;
-		});
 
-	std::cout << p << " -> " << r << '\n';
+			++p;
+		});
+	}, p);
+
+	std::cout << " > Removed " << Benchmarker::format_count(r) << ", leaving " << Benchmarker::format_count(p - r);
+	std::cout << '\n';
+}
+
+void test_entity_add_component(ecs::world& world)
+{
+	std::pair<uint32_t, uint32_t> testEntity = { 0, 30'000'002 };
+
+	std::cout << "Adding component Two to entity " << testEntity.second << ' ';
+	world.add_entity_component<Two>((ecs::entity&)testEntity);
+	std::cout << "Done\n";
 }
 
 int main()
 {
 	setlocale(LC_CTYPE, "");
 
-	Benchmarker::print_header();
-
-
-	//ecs::world world;
+	std::cout << "Creating our world... ";
 	decltype(ecs::world::create_world()) world = ecs::world::create_world();
-	//FillWorld(world);
+	std::cout << "Done\n";
+
 	//world.reserve_entities<Zero, One, Two, Three>(10'000'000);
 	//world.reserve_entities<Three, Four, Five>(10'000'000);
 	//world.reserve_entities<Two>(10'000'000);
 
+	std::cout << "Filling comparison vectors with test components... ";
 	auto baseRaw0 = create_vector<std::array<Esteem::Zero, ecs::config::bucket_size>>(10'000'000 / ecs::config::bucket_size);
 	auto baseRaw2 = create_vector<std::array<Esteem::Two, ecs::config::bucket_size>>(30'000'000 / ecs::config::bucket_size);
 	auto baseBucket2 = create_vector<ecs::details::archetype_storage<Esteem::Two>::bucket>(30'000'000 / ecs::config::bucket_size);
 	auto baseBucket0 = create_vector<ecs::details::archetype_storage<Esteem::Zero>::bucket>(10'000'000 / ecs::config::bucket_size);
+	std::cout << "Done\n";
 
+	std::cout << "Filling our world with entities and their components... ";
 	emplace_entities<One, Two, Three>(world, 10'000'000);
 	emplace_entities<Two>(world, 10'000'000);
 	emplace_entities<Two, Four, Five>(world, 10'000'000);
 	emplace_entities<Three, Six>(world, 10'000'000);
 	emplace_entities<Zero>(world, 10'000'000);
-
-	test_entity_erasure(world);
+	std::cout << "Done\n";
 
 	std::chrono::high_resolution_clock::time_point start, end;
 
-	std::cout << "(Two&) multiplication:\n";
-	{
-		Benchmarker::benchmark("  Raw buckets", [&]
+	std::cout << "Executing benchmarks... (this may take a while)\n";
+
+	Benchmarker::benchmark("(Two&) multiplication",
+		Benchmarker::sub_run{ "Raw buckets", [&]
 			{
 				for (auto& bucket : baseRaw2)
 				{
@@ -133,9 +145,8 @@ int main()
 				}
 			},
 			baseRaw2.size() * std::size(**baseRaw2.data())
-		);
-
-		Benchmarker::benchmark("  ECS buckets", [&]
+		},
+		Benchmarker::sub_run{ "ECS buckets", [&]
 			{
 				for (auto& bucket : baseBucket2)
 				{
@@ -147,9 +158,8 @@ int main()
 				}
 			},
 			baseBucket2.size() * std::size(**baseBucket2.data())
-		);
-
-		Benchmarker::benchmark("  ECS query", [&]
+		},
+		Benchmarker::sub_run{ "ECS query", [&]
 			{
 				world.query([](Two& two) -> void
 					{
@@ -158,13 +168,11 @@ int main()
 					});
 			},
 			world.count<Two>()
-		);
-	}
-	std::cout << '\n';
+		}
+	);
 
-	std::cout << "(Zero&) matrix 4x4 multiplication:\n";
-	{
-		Benchmarker::benchmark("  Raw buckets", [&]
+	Benchmarker::benchmark("(Zero&) matrix 4x4 multiplication",
+		Benchmarker::sub_run{ "Raw buckets", [&]
 			{
 				for (auto& bucket : baseRaw0)
 				{
@@ -175,9 +183,8 @@ int main()
 				}
 			},
 			baseBucket0.size() * std::size(**baseBucket0.data())
-		);
-
-		Benchmarker::benchmark("  ECS buckets", [&]
+		},
+		Benchmarker::sub_run{ "ECS buckets", [&]
 			{
 				for (auto& bucket : baseBucket0)
 				{
@@ -188,9 +195,8 @@ int main()
 				}
 			},
 			baseBucket0.size() * std::size(**baseBucket0.data())
-		);
-
-		Benchmarker::benchmark("  ECS query", [&]
+		},
+		Benchmarker::sub_run{ "ECS query", [&]
 			{
 				world.query([](Zero& zero) -> void
 					{
@@ -198,34 +204,29 @@ int main()
 					});
 			},
 			world.count<Zero>()
-		);
-
-		Benchmarker::benchmark("  ECS query entity", [&]
+		},
+		Benchmarker::sub_run{ "ECS query entity", [&]
 			{
-				world.query([](Zero& zero, Entity) -> void
+				world.query([](Zero& zero, ecs::entity) -> void
 					{
 						zero.data *= zero.data;
 					});
 			},
 			world.count<Zero>()
-		);
-
-		Benchmarker::benchmark("  ECS query erasable", [&]
+		},
+		Benchmarker::sub_run{ "ECS query_mut entity", [&]
 			{
-				world.query([](Zero& zero, ecs::erasable<Entity>) -> void
+				world.query_mutable([](Zero& zero, ecs::entity) -> void
 					{
 						zero.data *= zero.data;
 					});
 			},
 			world.count<Zero>()
-		);
+		}
+	);
 
-	}
-	std::cout << '\n';
-
-	std::cout << "(One&):\n";
-	{
-		Benchmarker::benchmark("  One=4.f", [&]
+	Benchmarker::benchmark("(One&)",
+		Benchmarker::sub_run{ "One = 4.f", [&]
 			{
 				world.query([](One& one) -> void
 					{
@@ -233,13 +234,11 @@ int main()
 					});
 			},
 			world.count<One>()
-		);
-	}
-	std::cout << '\n';
+		}
+	);
 
-	std::cout << "(One&, Two&):\n";
-	{
-		Benchmarker::benchmark("  Two*=a²", [&]
+	Benchmarker::benchmark("(One&, Two&)",
+		Benchmarker::sub_run{ "Two*=a²", [&]
 			{
 				world.query([](One& one, Two& two) -> void
 					{
@@ -248,21 +247,17 @@ int main()
 					});
 			},
 			world.count<One, Two>()
-		);
-	}
-	std::cout << '\n';
+		}
+	);
 
-	std::cout << "(One&, Two&) multiplication:\n";
-	{
-		Benchmarker::benchmark("  Function pointer", [&]
+	Benchmarker::benchmark("(One&, Two&) multiplication",
+		Benchmarker::sub_run{ "Function pointer", [&]
 			{
 				world.query(Test2);
 			},
 			world.count<One, Two>()
-		);
-
-
-		Benchmarker::benchmark("  Lambda", [&]
+		},
+		Benchmarker::sub_run{ "Lambda", [&]
 			{
 				world.query([](One& one, Two& two) -> void
 					{
@@ -274,14 +269,17 @@ int main()
 					});
 				},
 			world.count<One, Two>()
-		);
-	}
-	std::cout << '\n';
-
+		}
+	);
 
 	benchmark_counting<One, Two>(world, "(One, Two) counting");
 	benchmark_counting<Three>(world, "(Three) counting");
-	benchmark_counting<Three, ecs::exclude<One>>(world, "(Three, !One) counting");
-	benchmark_counting<Entity>(world, "(Entity) counting");
-	benchmark_counting<ecs::erasable<Entity>>(world, "(Entity) counting erasable");
+	benchmark_counting<Three, ecs::ex<One>>(world, "(Three, !One) counting");
+	benchmark_counting<ecs::entity>(world, "(entity) counting");
+
+	test_entity_erasure(world);
+	test_entity_add_component(world);
+
+	std::cout << '\n';
+	Benchmarker::print_results();
 }

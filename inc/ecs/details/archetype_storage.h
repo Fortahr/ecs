@@ -8,6 +8,10 @@
 #include "../utils.h"
 #include "component_matrix.h"
 
+#ifndef ECS_ONLY_USE_RUNTIME_REMOVE_FUNC
+#define ECS_ONLY_USE_RUNTIME_REMOVE_FUNC true
+#endif
+
 namespace ecs
 {
 	namespace details
@@ -34,6 +38,12 @@ namespace ecs
 				this->_index = index;
 			}
 
+			void move(uint32_t index, archetype_storage<>& storage)
+			{
+				this->_index = index;
+				this->_archetype = &storage;
+			}
+
 			void invalidate()
 			{
 				_version++;
@@ -46,7 +56,7 @@ namespace ecs
 		class archetype_storage
 		{
 		public:
-			class bucket
+			class alignas(config::bucket_size) bucket
 			{
 				friend class archetype_storage<_Components...>;
 			public:
@@ -71,29 +81,26 @@ namespace ecs
 				template<typename _T>
 				constexpr const component_row<_T>& get() const;
 
+				template<typename _T>
+				constexpr _T& get(size_t index);
+
+				template<typename _T>
+				constexpr component_row<_T>& get_unsafe(size_t offset);
+
+				template<typename _T>
+				constexpr _T& get_unsafe(size_t offset, size_t index);
+
 				template<size_t _Index>
 				constexpr component_row<std::tuple_element_t<_Index, std::tuple<_Components...>>>& get();
 
 				template<size_t _Index>
 				constexpr const component_row<std::tuple_element_t<_Index, std::tuple<_Components...>>>& get() const;
 
-				/*void* operator new(size_t size)
-				{
-#if _WIN32
-					return _aligned_malloc(size, _Size);
-#else
-					return aligned_alloc(_Size, size);
-#endif
-				}
+				static void* operator new(size_t count);
+				static void operator delete(void* ptr);
 
-				void operator delete(void* ptr)
-				{
-#if _WIN32
-					_aligned_free(ptr);
-#else
-					free(ptr);
-#endif
-				}*/
+				static void* operator new(size_t count, size_t custom_size) { return operator new(custom_size); }
+				static void operator delete(void* ptr, size_t custom_size) { operator delete(ptr); }
 			};
 
 		private:
@@ -105,21 +112,51 @@ namespace ecs
 			size_t _entity_count = 0;
 			std::vector<std::unique_ptr<bucket>> _buckets;
 
+			size_t _bucket_size;
+			// uint32_t _bucket_align; // we are already aligned by config::bucket_size
+
 			uint32_t remove(size_t index);
 
-			decltype(&archetype_storage::remove) removeOperation = &archetype_storage::remove;
+#if !ECS_ONLY_USE_RUNTIME_REMOVE_FUNC
+			decltype(&archetype_storage::remove) _removeOperation; // runtime version is faster in our test cases
+#endif
 
 			template<typename _T>
+			static void destruct(_T& object);
+
+			template<typename _T>			
 			static void move_and_destruct(_T& to, _T&& from);
+
+			template<typename... _Cs, typename _MoveFunc, typename _RemoveFunc>
+			uint32_t remove_internal(size_t index, _MoveFunc move_func, _RemoveFunc remove_func);
 
 			template<typename _T, typename _ComponentMatrix>
 			void initialize_component_offset();
+
+			template<typename... _Cs>
+			uint32_t emplace_internal(entity entity, _Cs&&... move);
 
 		public:
 			archetype_storage();
 
 			template<typename... _Cs>
-			archetype_storage<_Cs...>& initialize();
+			void initialize();
+
+#pragma region runtime methods
+			template<typename... _Cs>
+			void runtime_initialize(size_t mask, ecs::pack<_Cs...>);
+
+			template<typename... _Cs>
+			std::tuple<uint32_t, bucket*, uint32_t> runtime_move(size_t index, archetype_storage<>& new_storage, ecs::pack<_Cs...>);
+			
+			template<typename... _Cs>
+			uint32_t runtime_remove_internal(size_t index, ecs::pack<_Cs...>);
+
+			uint32_t runtime_remove(size_t index);
+
+			template<typename... _Cs>
+			uint32_t runtime_emplace(entity entity, ecs::pack<_Cs...>);
+#pragma endregion
 
 			size_t size() const;
 
@@ -135,17 +172,19 @@ namespace ecs
 
 			uint32_t emplace(entity entity);
 
-			template<size_t _CSize = sizeof...(_Components), typename = std::enable_if_t<(_CSize > 0)>>
+			template<typename = std::enable_if_t<(sizeof...(_Components) > 0)>>
 			uint32_t emplace(entity entity, _Components&&... move);
 
 			// erases entity at given index, returns the entity that took its place
 			uint32_t erase(size_t index);
 
-			template<typename... _Cs, typename = std::enable_if_t<(sizeof...(_Cs) > 0)>>
-			static uint32_t remove_generic(archetype_storage& storage, size_t index, ecs::registry<_Cs...>);
-
 			//void reserve(size_t size);
 			const std::vector<std::unique_ptr<bucket>>& get_buckets() const;
+
+			constexpr explicit operator archetype_storage<>& ()
+			{
+				return reinterpret_cast<archetype_storage<>&>(*this);
+			}
 		};
 	}
 }

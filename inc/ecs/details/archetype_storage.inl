@@ -2,11 +2,12 @@
 
 #include <utility>
 
+#include "../config.h"
+
 #include "archetype_storage.h"
 
 namespace ecs::details
 {
-
 	template<typename... _Components>
 	constexpr auto archetype_storage<_Components...>::bucket::components() -> ComponentData&
 	{
@@ -47,6 +48,47 @@ namespace ecs::details
 	}
 
 	template<typename... _Components>
+	template<typename _T>
+	constexpr _T& archetype_storage<_Components...>::bucket::get(size_t index)
+	{
+		return static_cast<const component_row<_T>&>(_component_data)[index];
+	}
+
+	template<typename... _Components>
+	template<typename _T>
+	constexpr component_row<_T>& archetype_storage<_Components...>::bucket::get_unsafe(size_t offset)
+	{
+		return *reinterpret_cast<component_row<_T>*>(uintptr_t(&_component_data) + offset);
+	}
+
+	template<typename... _Components>
+	template<typename _T>
+	constexpr _T& archetype_storage<_Components...>::bucket::get_unsafe(size_t offset, size_t index)
+	{
+		return get_unsafe<_T>(offset)[index];
+	}
+
+	template<typename... _Components>
+	void* archetype_storage<_Components...>::bucket::operator new(size_t count)
+	{
+#if _WIN32
+		return _aligned_malloc(count, config::bucket_size);
+#else
+		return aligned_alloc(config::bucket_size, count);
+#endif
+	}
+
+	template<typename... _Components>
+	void archetype_storage<_Components...>::bucket::operator delete(void* ptr)
+	{
+#if _WIN32
+		_aligned_free(ptr);
+#else
+		free(ptr);
+#endif
+	}
+
+	template<typename... _Components>
 	template<size_t _Index>
 	constexpr component_row<std::tuple_element_t<_Index, std::tuple<_Components...>>>& archetype_storage<_Components...>::bucket::get()
 	{
@@ -64,14 +106,29 @@ namespace ecs::details
 
 	template<typename... _Components>
 	archetype_storage<_Components...>::archetype_storage()
+		: _bucket_size(sizeof(bucket))
 	{
-		memset(_component_offsets, ~0, sizeof(_component_offsets));
+		std::fill(_component_offsets, _component_offsets + std::size(_component_offsets), ~0);
+
+#if !ECS_ONLY_USE_RUNTIME_REMOVE_FUNC
+		if constexpr (sizeof...(_Components) > 0)
+			_removeOperation = &archetype_storage::remove;
+		else
+			_removeOperation = &archetype_storage::runtime_remove;
+#endif
 	}
 
 	template<typename... _Components>
 	inline auto archetype_storage<_Components...>::get_buckets() const -> const std::vector<std::unique_ptr<bucket>>&
 	{
 		return _buckets;
+	}
+
+	template<typename... _Components>
+	template<typename _T>
+	inline void archetype_storage<_Components...>::destruct(_T& object)
+	{
+		object.~_T();
 	}
 
 	template<typename... _Components>
@@ -83,85 +140,69 @@ namespace ecs::details
 	}
 
 	template<typename... _Components>
-	inline uint32_t archetype_storage<_Components...>::remove(size_t index)
+	template<typename... _Cs, typename _MoveFunc, typename _RemoveFunc>
+	inline uint32_t archetype_storage<_Components...>::remove_internal(size_t index, _MoveFunc move_func, _RemoveFunc remove_func)
 	{
-		size_t toIndex = index % config::bucket_size;
-		auto& to = this->_buckets[index / config::bucket_size];
+		assert(index < _entity_count);
 
-		if (this->_entity_count > 0)
+		size_t entityCount = --_entity_count;
+		if (entityCount > 0)
 		{
-			size_t fromIndex = this->_entity_count % config::bucket_size;
-			size_t fromBucketIndex = this->_entity_count / config::bucket_size;
-			auto& from = this->_buckets[fromBucketIndex];
+			size_t toIndex = index % config::bucket_size;
+			auto& to = _buckets[index / config::bucket_size];
+
+			size_t fromIndex = entityCount % config::bucket_size;
+			size_t fromBucketIndex = entityCount / config::bucket_size;
+			auto& from = _buckets[fromBucketIndex];
 
 			entity replaced = to->_to_entity[toIndex] = from->_to_entity[fromIndex];
 			from->_to_entity[fromIndex].invalidate();
 
 			size_t reverse = 0;
-			((move_and_destruct(to->get<_Components>()[toIndex], std::move(from->get<_Components>()[fromIndex])), reverse) = ... = 0);
+			if constexpr (sizeof...(_Components) > 0)
+				((move_func(to->get<_Cs>(toIndex), std::move(from->get<_Cs>(fromIndex)), _component_mask), reverse) = ... = 0);
+			else
+			{
+				(([&]()
+				{
+					const size_t offset = component_offset<config::registry::template index_of<_Cs>()>();
+					move_func(to->get_unsafe<_Cs>(offset, toIndex), std::move(from->get_unsafe<_Cs>(offset, fromIndex)), _component_mask);
+				}, reverse) = ... = 0);
+			}
+
+			if (fromIndex == 0)
+				_buckets.pop_back();
 
 			return replaced.get_id();
 		}
 		else
 		{
+			assert(_buckets.size() == 1);
+
 			size_t reverse = 0;
-			((to->get<_Components>()[index].~_Components(), reverse) = ... = 0);
+			if constexpr (sizeof...(_Components) > 0)
+				((remove_func(_buckets[0]->get<_Cs>(0), _component_mask), reverse) = ... = 0);
+			else
+			{
+				(([&]()
+				{
+					const size_t offset = component_offset<config::registry::template index_of<_Cs>()>();
+					remove_func(_buckets[0]->get_unsafe<_Cs>(offset, 0), _component_mask);
+				}, reverse) = ... = 0);
+			}
+
+			_buckets.clear();
 
 			return entity::npos;
 		}
 	}
 
 	template<typename... _Components>
-	template<typename... _Cs, typename>
-	inline uint32_t archetype_storage<_Components...>::remove_generic(archetype_storage& storage, size_t index, ecs::registry<_Cs...>)
+	inline uint32_t archetype_storage<_Components...>::remove(size_t index)
 	{
-		size_t toIndex = index % config::bucket_size;
-		bucket* to = (bucket*)storage._buckets[index / config::bucket_size];
-
-		if (storage._entity_count > 0)
-		{
-			size_t fromIndex = storage._entity_count % config::bucket_size;
-			size_t fromBucketIndex = storage._entity_count / config::bucket_size;
-			bucket* from = (bucket*)storage._buckets[fromBucketIndex];
-
-			entity replaced = to->toEntity[toIndex] = from->toEntity[fromIndex];
-			from->toEntity[fromIndex].remove();
-
-			([&]()
-				{
-					if (config::registry::template bit_mask_of<_Cs>() & storage.component_mask())
-					{
-						const size_t offset = storage.component_offset<config::registry::template index_of<_Cs>()>();
-						auto& toComponent = reinterpret_cast<_Cs*>(uintptr_t(&to->components()) + offset)[toIndex];
-						auto& fromComponent = reinterpret_cast<_Cs*>(uintptr_t(&from->components()) + offset)[fromIndex];
-
-						toComponent = std::move(fromComponent);
-						fromComponent.~_Cs();
-					}
-				}(), ...);
-
-			return replaced.get_id();
-		}
-		else
-		{
-			([&]()
-				{
-					if constexpr (!std::is_trivially_destructible_v<_Cs>)
-					{
-						if (config::registry::template bit_mask_of<_Cs>() & storage.component_mask())
-						{
-							const size_t offset = storage.component_offset<config::registry::template index_of<_Cs>()>();
-							auto& component = reinterpret_cast<_Cs*>(uintptr_t(&to->components()) + offset)[toIndex];
-
-							component.~_Cs();
-						}
-					}
-				}(), ...);
-
-			storage._buckets.pop_back();
-
-			return entity::npos;
-		}
+		return remove_internal<_Components...>(index,
+			[](auto& to, auto&& from, auto mask) { move_and_destruct(to, std::move(from)); },
+			[](auto& remove, auto mask) { destruct(remove); });
 	}
 
 	template<typename... _Components>
@@ -176,15 +217,149 @@ namespace ecs::details
 
 	template<typename... _Components>
 	template<typename... _Cs>
-	inline archetype_storage<_Cs...>& archetype_storage<_Components...>::initialize()
+	inline void archetype_storage<_Components...>::initialize()
 	{
 		typedef component_matrix<_Cs...> ComponentMatrix;
 		_component_mask = config::registry::template bit_mask_of<_Cs...>();
+		_bucket_size = sizeof(archetype_storage<_Cs...>::bucket);
 
 		(initialize_component_offset<_Cs, ComponentMatrix>(), ...);
-
-		return *reinterpret_cast<archetype_storage<_Cs...>*>(this);
 	}
+
+#pragma region runtime functions
+
+	template<typename... _Components>
+	template<typename... _Cs>
+	inline void archetype_storage<_Components...>::runtime_initialize(size_t mask, ecs::pack<_Cs...>)
+	{
+		using offset_t = std::remove_reference_t<decltype(*_component_offsets)>;
+
+		size_t bucketSize = 0;
+
+		([&]()
+			{
+				constexpr size_t i = config::registry::template index_of<_Cs>();
+				constexpr size_t componentMask = 1ull << i;
+
+				if (componentMask & mask)
+				{
+					assert(bucketSize < std::numeric_limits<offset_t>::max());
+
+					// size storing as: sizeof(T[config::bucket_size]) / config::bucket_size = sizeof(T)
+					_component_offsets[i] = offset_t(bucketSize);
+
+					bucketSize += offset_t(ecs::config::registry::_component_size[i]);
+
+				}
+			}(), ...);
+
+		_component_mask = mask;
+		_bucket_size = bucketSize * config::bucket_size + sizeof(archetype_storage<>::bucket);
+	}
+
+	template<typename... _Components>
+	template<typename... _Cs>
+	inline auto archetype_storage<_Components...>::runtime_move(size_t index, archetype_storage<>& new_storage, ecs::pack<_Cs...>)
+		-> std::tuple<uint32_t, bucket*, uint32_t>
+	{
+		size_t newIndex = new_storage._entity_count++;
+		size_t newBucketIndex = newIndex / config::bucket_size;
+		size_t newElementIndex = newIndex % config::bucket_size;
+
+		auto& newBucket = newBucketIndex < new_storage._buckets.size()
+			? new_storage._buckets[newBucketIndex]
+			: new_storage._buckets.emplace_back(new (new_storage._bucket_size) bucket());
+
+		size_t toIndex = index % config::bucket_size;
+		auto& to = _buckets[index / config::bucket_size];
+
+		newBucket->_to_entity[newElementIndex] = to->_to_entity[toIndex];
+
+		return { uint32_t(newIndex), newBucket.get(), remove_internal<_Cs...>(index,
+			[&](auto& to, auto&& from, auto mask)
+			{
+				typedef std::remove_reference_t<decltype(to)> _Cs;
+				
+				if (config::registry::template bit_mask_of<_Cs>() & mask)
+				{
+					const size_t newOffset = new_storage.component_offset<config::registry::template index_of<_Cs>()>();
+
+					newBucket->get_unsafe<_Cs>(newOffset, newElementIndex) = std::move(to);
+					move_and_destruct(to, std::move(from));
+				}
+			},
+			[&](auto& remove, auto mask)
+			{
+				typedef std::remove_reference_t<decltype(remove)> _Cs;
+
+				if (config::registry::template bit_mask_of<_Cs>() & mask)
+				{
+					const size_t newOffset = new_storage.component_offset<config::registry::template index_of<_Cs>()>();
+
+					move_and_destruct(newBucket->get_unsafe<_Cs>(newOffset, newElementIndex), std::move(remove));
+				}
+			}) };
+	}
+
+	template<typename... _Components>
+	template<typename... _Cs>
+	inline uint32_t archetype_storage<_Components...>::runtime_remove_internal(size_t index, ecs::pack<_Cs...>)
+	{
+		return remove_internal<_Cs...>(index,
+			[](auto& to, auto&& from, auto mask)
+			{
+				typedef std::remove_reference_t<decltype(to)> _Cs;
+
+				if (config::registry::template bit_mask_of<_Cs>() & mask)
+					move_and_destruct(to, std::move(from));
+			},
+			[](auto& remove, auto mask)
+			{
+				typedef std::remove_reference_t<decltype(remove)> _Cs;
+
+				if constexpr (!std::is_trivially_destructible_v<_Cs>)
+				{
+					if (config::registry::template bit_mask_of<_Cs>() & mask)
+						remove.~_Cs();
+				}
+			});
+	}
+
+	template<typename... _Components>
+	inline uint32_t archetype_storage<_Components...>::runtime_remove(size_t index)
+	{
+		return runtime_remove_internal(index, ecs::config::registry::components());
+	}
+
+	template<typename... _Components>
+	template<typename... _Cs>
+	inline uint32_t archetype_storage<_Components...>::runtime_emplace(entity entity, ecs::pack<_Cs...>)
+	{
+		size_t size = _entity_count++;
+		size_t index = size % config::bucket_size, bucketIndex = size / config::bucket_size;
+
+		auto& _bucket = bucketIndex < _buckets.size()
+			? _buckets[bucketIndex]
+			: _buckets.emplace_back((bucket*)new uint8_t[this->_bucket_size]);
+
+		_bucket->_to_entity[index] = entity;
+
+		([&]()
+			{
+				//if constexpr (!std::is_trivially_constructible_v<_Cs>)
+				{
+					constexpr size_t i = config::registry::template index_of<_Cs>();
+					constexpr size_t mask = 1ull << i;
+
+					if (mask & _component_mask)
+						new (&_bucket->get_unsafe<_Cs>(_component_offsets[i], index)) _Cs();
+				}
+			}(), ...);
+
+		return uint32_t(bucketIndex * config::bucket_size + index);
+	}
+
+#pragma endregion
 
 	template<typename... _Components>
 	size_t archetype_storage<_Components...>::size() const
@@ -230,7 +405,8 @@ namespace ecs::details
 	}
 
 	template<typename... _Components>
-	inline uint32_t archetype_storage<_Components...>::emplace(entity entity)
+	template<typename... _Cs>
+	inline uint32_t archetype_storage<_Components...>::emplace_internal(entity entity, _Cs&&... move)
 	{
 		size_t size = _entity_count++;
 		size_t index = size % config::bucket_size, bucketIndex = size / config::bucket_size;
@@ -241,37 +417,35 @@ namespace ecs::details
 
 		_bucket->_to_entity[index] = entity;
 
-		((_bucket->get<_Components>()._elements[index] = {}), ...);
+		if constexpr (sizeof...(_Cs) > 0)
+			((_bucket->get<_Cs>(index) = std::move(move)), ...);
+		else
+			((_bucket->get<_Cs>(index)._Cs()), ...);
 
 		return uint32_t(bucketIndex * config::bucket_size + index);
 	}
 
 	template<typename... _Components>
-	template<size_t _CSize, typename>
+	inline uint32_t archetype_storage<_Components...>::emplace(entity entity)
+	{
+		return emplace_internal(entity);
+	}
+
+	template<typename... _Components>
+	template<typename>
 	inline uint32_t archetype_storage<_Components...>::emplace(entity entity, _Components&&... move)
 	{
-		size_t size = _entity_count++;
-		size_t index = size % config::bucket_size, bucketIndex = size / config::bucket_size;
-
-		auto& _bucket = bucketIndex < _buckets.size()
-			? _buckets[bucketIndex]
-			: _buckets.emplace_back(std::make_unique<bucket>());
-
-		_bucket->toEntity[index] = entity;
-
-		((_bucket->get<_Components>()[index] = std::move(move)), ...);
-
-		return uint32_t(bucketIndex * config::bucket_size + index);
+		return emplace_internal(entity, std::forward<_Components>(move)...);
 	}
 
 	template<typename... _Components>
 	inline uint32_t archetype_storage<_Components...>::erase(size_t index)
 	{
-		assert(index < _entity_count);
-
-		--_entity_count;
-
-		return (this->*removeOperation)(index);
+#if ECS_ONLY_USE_RUNTIME_REMOVE_FUNC
+		return runtime_remove(index);
+#else
+		return (this->*_removeOperation)(index);
+#endif
 	}
 
 	/*template<typename... _Components>

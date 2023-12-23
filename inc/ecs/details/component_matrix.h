@@ -8,6 +8,11 @@ namespace ecs::details
 	struct component_row
 	{
 		_T _elements[config::bucket_size];
+
+		_T& operator[](size_t index)
+		{
+			return _elements[index];
+		}
 	};
 
 	template<typename... _Components>

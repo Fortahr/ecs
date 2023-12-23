@@ -10,12 +10,20 @@ namespace ecs
 	class registry
 	{
 	public:
+		using components = pack<_Components...>;
+
+		constexpr static uint16_t _component_size[sizeof...(_Components)] = { sizeof(_Components)... };
+
 		// Get the amount of components
 		constexpr static size_t size();
 
 		// Get the registry index of the component
 		template<typename _T, typename = std::enable_if_t<std::disjunction_v<is_entity<_T>, std::is_same<_T, _Components>...>>>
 		constexpr static uint8_t index_of();
+
+		// Get the registry index of the component
+		template<typename _T>
+		constexpr static bool contains();
 
 		// Create the bit mask of the given component
 		template<typename _T>
