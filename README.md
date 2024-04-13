@@ -56,42 +56,47 @@ Notes:
 
 ## MSVC with AVX2 support
 ```
-Test                        Count       Median         Mean       StdDev       CI / 2
-(Two&) multiplication:
-  Raw buckets                 30M      1.61341      1.63667      0.07968      0.02290
-  ECS buckets                 30M      1.93362      1.96762      0.05667      0.01628
-  ECS query                   30M      2.24501      2.28106      0.08270      0.02376
+Test                            Count       Median         Mean       StdDev       CI / 2
 
-(Zero&) matrix 4x4 multiplication:
-  Raw buckets                 10M     17.81684     17.80991      0.13152      0.03779
-  ECS buckets                 10M     18.07440     18.08647      0.16882      0.04851
-  ECS query                   10M     18.03297     18.06221      0.18721      0.05379
+(Two&) multiplication
+  Raw buckets                     30M      1.55202      1.55644      0.01204      0.00346
+  ECS buckets                     30M      1.95631      1.96062      0.02030      0.00583
+  ECS query                       30M      2.21243      2.21480      0.02185      0.00628
 
-(One&):
-  One=4.f                     10M      1.87868      1.94202      0.14241      0.04092
+(Zero&) matrix 4x4 multiplication
+  Raw buckets                     10M     16.95202     16.94638      0.07077      0.02033
+  ECS buckets                     10M     17.49242     17.50374      0.07741      0.02224
+  ECS query                       10M     17.51966     17.50934      0.05898      0.01695
+  ECS query entity                10M     17.51722     17.55157      0.16768      0.04818
+  ECS query_mut entity            10M     18.28640     18.29692      0.10230      0.02939
 
-(One&, Two&):
-  Two*=a²                     10M      2.44400      2.53864      0.21919      0.06298
+(One&)
+  One = 4.f                       10M      1.78094      1.79027      0.02400      0.00690
 
-(One&, Two&) multiplication:
-  Function pointer            10M      5.03163      5.26202      0.37485      0.10771
-  Lambda                      10M      3.83392      3.97265      0.22968      0.06600
+(One&, Two&)
+  Two*=a²                         10M      2.57193      2.56842      0.02116      0.00608
+
+(One&, Two&) multiplication
+  Function pointer                10M      4.85793      5.00983      0.34365      0.09874
+  Lambda                          10M      3.90494      4.02753      0.26628      0.07651
 
 (One, Two) counting
-  ECS query                   10M      0.12764      0.13304      0.01627      0.00468
-  ECS count                   10M      0.00000      0.00000      0.00001      0.00000
+  ECS query                       10M      0.12087      0.12468      0.01237      0.00355
+  ECS count                       10M      0.00000      0.00000      0.00000      0.00000
 
 (Three) counting
-  ECS query                   20M      0.12879      0.13271      0.01097      0.00315
-  ECS count                   20M      0.00000      0.00000      0.00000      0.00000
+  ECS query                       20M      0.11952      0.12033      0.00212      0.00061
+  ECS count                       20M      0.00000      0.00000      0.00000      0.00000
 
 (Three, !One) counting
-  ECS query                   10M      0.12692      0.13377      0.01321      0.00380
-  ECS count                   10M      0.00000      0.00000      0.00001      0.00000
+  ECS query                       10M      0.12543      0.12912      0.01023      0.00294
+  ECS count                       10M      0.00000      0.00000      0.00000      0.00000
 
-(Entity) counting
-  ECS query                   50M      0.13133      0.13142      0.00375      0.00108
-  ECS count                   50M      0.00000      0.00000      0.00000      0.00000
+(entity) counting
+  ECS query                       50M      0.12636      0.12624      0.00145      0.00042
+  ECS count                       50M      0.00000      0.00000      0.00000      0.00000
+
+Removing entities                 50M     17.81741     17.81741      0.00000      0.00000
 
 * values are given in nanoseconds, calculated as: totalTime / Count.
 ```

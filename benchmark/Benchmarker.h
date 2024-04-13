@@ -187,7 +187,7 @@ inline void Benchmarker::print_results()
 			cout << '\n';
 
 		if (curIsGroup)
-			cout << std::left << std::setw(first_column_width) << std::get<0>(test) << '\n';
+			cout << std::left << std::get<0>(test) << '\n';
 
 		for (auto& subTest : std::get<1>(test))
 		{
@@ -197,7 +197,7 @@ inline void Benchmarker::print_results()
 				cout << std::left << std::setw(first_column_width) << std::get<0>(subTest);
 
 			cout << std::right << std::fixed << std::setprecision(5);
-			cout << ' ' << format_count(std::get<1>(subTest));
+			cout << ' ' << std::setw(column_width) << format_count(std::get<1>(subTest));
 			print_measurement(cout << ' ', std::get<2>(subTest), measurement_division);
 			print_measurement(cout << ' ', std::get<3>(subTest), measurement_division);
 			print_measurement(cout << ' ', std::get<4>(subTest), measurement_division);
