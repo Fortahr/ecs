@@ -28,4 +28,10 @@ namespace ecs
 	template<typename _T> struct is_entity : std::is_same<entity, _T> {};
 	template<typename _T> using is_entity_t = typename is_entity<_T>::type;
 	template<typename _T> constexpr bool is_entity_v = is_entity<_T>::value;
+
+	template<typename _T, typename... _Ts> struct param_index;
+	template<typename _T, typename... _Ts> struct param_index<_T, _T, _Ts...> : std::integral_constant<std::size_t, 0> {};
+	template<typename _T, typename _T2, typename... _Ts> struct param_index<_T, _T2, _Ts...> : std::integral_constant<std::size_t, 1 + param_index<_T, _Ts...>::value> {};	
+	template<typename _T> using param_index_t = typename param_index<_T>::type;
+	template<typename _T> constexpr bool param_index_v = param_index<_T>::value;
 }

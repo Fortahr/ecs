@@ -17,14 +17,13 @@ namespace ecs
 	inline decltype(world::_worlds) world::_worlds;
 	inline decltype(world::_world_index_queue) world::_world_index_queue;
 
-	template <typename>
-	world::world(world_index_type index)
+	inline world::world(world_index_type index)
 		: _world_index(index)
 	{
 	}
 
 	template <typename>
-	world::world()
+	inline world::world()
 	{
 		if (_world_index_queue.empty())
 		{
@@ -41,7 +40,7 @@ namespace ecs
 	}
 
 	template <typename>
-	world::world(world&& move)
+	inline world::world(world&& move)
 		: _archetypes(std::move(move._archetypes))
 		, _entity_max(std::move(move._entity_max))
 		, _world_index(std::move(move._world_index))
@@ -52,48 +51,49 @@ namespace ecs
 			_worlds[_world_index] = this;
 	}
 
-	template <typename _Res>
-	static _Res world::create_world_internal()
+	template<bool _Inheritable>
+	static typename world::world_storage_internal_t<_Inheritable>::create_t world::create_world_internal(world_vector_t<typename world_storage_internal_t<_Inheritable>::store_t>& worlds)
 	{
-		if constexpr (std::is_same_v<_Res, world>)
-			return world();
+		return world();
+	}
+
+	template <>
+	inline world::world_storage_internal_t<false>::create_t world::create_world_internal<false>(world_vector_t<world_storage_internal_t<false>::store_t>& worlds)
+	{
+		if (_world_index_queue.empty())
+		{
+			auto index = world_index_type(worlds.size());
+			assert(index < (1 << config::world_bits));
+
+			return worlds.emplace_back(index);
+		}
 		else
 		{
-			if (_world_index_queue.empty())
-			{
-				auto index = world_index_type(_worlds.size());
-				assert(index < (1 << config::world_bits));
+			auto index = _world_index_queue.front();
+			_world_index_queue.pop();
 
-				return _worlds.emplace_back(index);
-			}
-			else
-			{
-				auto index = _world_index_queue.front();
-				_world_index_queue.pop();
+			auto& w = worlds[index];
+			w.~world();
+			new (&w) world(index);
 
-				auto& w = _worlds[index];
-				w.~world();
-				new (&w) world(index);
-
-				return w;
-			}
+			return w;
 		}
 	}
 
-	std::conditional_t<ecs::config::world_inheritable, world, world&> world::create_world()
+	inline world::world_storage_type::create_t world::create_world()
 	{
-		return create_world_internal<std::conditional_t<ecs::config::world_inheritable, world, world&>>();
+		return create_world_internal<ecs::config::world_inheritable>(_worlds);
 	}
 
-	world::~world()
+	inline world::~world()
 	{
 		_world_index_queue.push(_world_index);
 	}
-		
+	
 	template<typename... _Components>
 	inline details::archetype_storage<_Components...>& world::emplace_archetype()
 	{
-		constexpr auto bitmask = config::registry::template bit_mask_of<_Components...>();
+		constexpr auto bitmask = config::registry::template bit_mask_of<_Components...>;
 		for (auto& archetype : _archetypes)
 		{
 			if (archetype.component_mask() == bitmask)
@@ -120,7 +120,7 @@ namespace ecs
 		return archetype;
 	}
 
-	std::pair<entity, details::entity_target&> world::allocate_entity()
+	inline std::pair<entity, details::entity_target&> world::allocate_entity()
 	{
 		uint32_t entity_id;
 		if (_entity_mapping_queue.empty())
@@ -154,7 +154,7 @@ namespace ecs
 
 		return entity;
 	}
-		
+
 	template<typename... _Components, typename>
 	inline entity world::emplace_entity(_Components&&... move)
 	{
@@ -167,7 +167,7 @@ namespace ecs
 
 		return entity;
 	}
-		
+
 	inline bool world::erase_entity(entity entity)
 	{
 		details::entity_target entity_reference;
@@ -194,20 +194,20 @@ namespace ecs
 	}*/
 
 	template<typename _Component, typename... _Args, typename>
-	bool world::add_entity_component(entity entity, _Args&&... args)
+	inline bool world::add_entity_component(entity entity, _Args&&... args)
 	{
 		details::entity_target entity_reference;
 		if (get_entity(entity, entity_reference))
 		{
 			auto mask = entity_reference._archetype->component_mask();
-			auto new_mask = mask | ecs::config::registry::template bit_mask_of<_Component>();
+			auto new_mask = mask | ecs::config::registry::template bit_mask_of<_Component>;
 
 			if (new_mask != mask)
 			{
 				auto& archetype = runtime_emplace_archetype(new_mask);
 				auto [ newIndex, bucket, replaced ] = entity_reference._archetype->runtime_move(entity_reference._index, archetype,	config::registry::components());
 
-				size_t component_offset = archetype.component_offset(ecs::config::registry::template index_of<_Component>());
+				size_t component_offset = archetype.component_offset(ecs::config::registry::template index_of<_Component>);
 				auto& component = bucket->get_unsafe<_Component>(component_offset, newIndex % config::bucket_size);
 				new (&component) _Component(std::forward<_Args>(args)...);
 
@@ -252,7 +252,7 @@ namespace ecs
 	}
 
 	template<typename _Arg>
-	__forceinline constexpr decltype(auto) world::forward_argument(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
+	inline __forceinline constexpr decltype(auto) world::forward_argument(size_t i, const details::archetype_storage<>::bucket& bucket, uintptr_t offset)
 	{
 		uintptr_t matrix = reinterpret_cast<uintptr_t>(&bucket.components());
 		return reinterpret_cast<_Arg*>(matrix + offset)[i];
@@ -265,20 +265,21 @@ namespace ecs
 	}
 
 	template<typename _Func, typename... _Args>
-	__forceinline constexpr void world::apply_to_bucket_entities(const details::query_func<_Func, _Args...>& func, size_t count, const details::archetype_storage<>::bucket& bucket, const std::array<uintptr_t, sizeof...(_Args)>& position)
+	inline __forceinline constexpr void world::apply_to_bucket_entities(const details::query_func<_Func, _Args...>& func, size_t count, const details::archetype_storage<>::bucket& bucket, const std::array<uintptr_t, sizeof...(_Args)>& position)
 	{
+		typedef registry<_Args...> indexer;
+
 		for (size_t i = 0; i < count; ++i)
 		{
-			size_t p = 0;
 #pragma warning( suppress : 28020 ) // MSVC code analyzer shows false positives on std::array[p < n]
-			func(forward_argument<_Args>(i, bucket, position[p++])...);
+			func(forward_argument<_Args>(i, bucket, position[indexer::template index_of<_Args>])...);
 		}
 	}
 
 	template<typename _Func, typename... _Args>
-	__forceinline constexpr void world::apply_to_archetype_entities(const details::query_func<_Func, _Args...>& func, details::archetype_storage<>& archetype)
+	inline __forceinline constexpr void world::apply_to_archetype_entities(const details::query_func<_Func, _Args...>& func, details::archetype_storage<>& archetype)
 	{
-		const std::array<uintptr_t, sizeof...(_Args)> position{(archetype.component_offset<config::registry::template index_of<_Args>()>())...};
+		const std::array<uintptr_t, sizeof...(_Args)> position{(archetype.component_offset<config::registry::template index_of<_Args>>())...};
 		const size_t lastbucketSize = archetype.size() % config::bucket_size;
 
 		auto* bucket = archetype.get_buckets().data();
@@ -292,12 +293,14 @@ namespace ecs
 	}
 	
 	template<typename _Func, typename... _Args>
-	constexpr void world::apply_to_archetype_entities_mutable(const details::query_func<_Func, _Args...>& func, details::archetype_storage<>& archetype)
+	inline constexpr void world::apply_to_archetype_entities_mutable(const details::query_func<_Func, _Args...>& func, details::archetype_storage<>& archetype)
 	{
+		typedef registry<_Args...> indexer;
+
 		if (archetype.size() == 0)
 			return;
 
-		const std::array<uintptr_t, sizeof...(_Args)> position{ (archetype.component_offset<config::registry::template index_of<_Args>()>())... };
+		const std::array<uintptr_t, sizeof...(_Args)> position{ (archetype.component_offset<config::registry::template index_of<_Args>>())... };
 
 		auto* bucket = archetype.get_buckets().data();
 
@@ -306,9 +309,8 @@ namespace ecs
 			const entity& ent = (*bucket)->get_entity(i);
 			auto prevId = ent.get_id();
 
-			size_t p = 0;
 #pragma warning( suppress : 28020 ) // MSVC code analyzer shows false positives on std::array[p < n]
-			func(forward_argument<_Args>(i, **bucket, position[p++])...);
+			func(forward_argument<_Args>(i, **bucket, position[indexer::template index_of<_Args>])...);
 
 			if (count >= archetype.size())
 				return;

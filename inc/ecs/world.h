@@ -16,8 +16,16 @@ namespace ecs
 {
 	class world
 	{
+	private:
+		template <bool _Inheritable>
+		struct world_storage_internal_t
+		{
+			using store_t = std::conditional_t<_Inheritable, world*, world>;
+			using create_t = std::conditional_t<_Inheritable, world, world&>;
+		};
+
 	public:
-		using world_store_type = std::conditional_t<ecs::config::world_inheritable, world*, world>;
+		using world_storage_type = world_storage_internal_t<ecs::config::world_inheritable>;
 
 		using world_index_type = 
 			std::conditional_t<ecs::config::world_bits <= 8, uint8_t,
@@ -26,42 +34,45 @@ namespace ecs
 			uint64_t>>>;
 
 	private:
-		struct private_allocator : std::allocator<world>
+		template <typename _T>
+		struct private_allocator : public std::allocator<_T>
 		{
-			template <typename _T> struct rebind { typedef private_allocator other; };
+		public:
+			template <typename _Other> struct rebind { typedef private_allocator<_Other> other; };
+			
+			using std::allocator<_T>::allocator;
 
-			template <typename _T, typename... _Args>
-			static inline void construct(_T* ptr, _Args&&... args) { ::new ((void*)ptr) _T(std::forward<_Args>(args)...); }
+			template <typename _T2, typename... _Args>
+			static inline void construct(_T2* ptr, _Args&&... args) { ::new ((void*)ptr) _T(std::forward<_Args>(args)...); }
 		};
 
-		using world_vector = std::conditional_t<ecs::config::world_fixed_vector != 0,
-			details::fixed_vector<world_store_type, ecs::config::world_fixed_vector, private_allocator>,
-			std::vector<world_store_type, private_allocator>>;
+		template <typename _W> using world_vector_fixed = details::fixed_vector<_W, ecs::config::world_fixed_vector, private_allocator<_W>>;
+		template <typename _W> using world_vector_dynamic = std::vector<_W, private_allocator<_W>>;
+		template <typename _W> using world_vector_t = std::conditional_t<ecs::config::world_fixed_vector != 0, world_vector_fixed<_W>, world_vector_dynamic<_W>>;
+		using world_vector_type = world_vector_t<world_storage_type::store_t>;
 
-		using archetype_vector = std::conditional_t<ecs::config::archetype_fixed_vector != 0,
-			details::fixed_vector<details::archetype_storage<>, ecs::config::archetype_fixed_vector>,
-			details::bucket_vector<details::archetype_storage<>, 32>>;
+		using archetype_vector_fixed = details::fixed_vector<details::archetype_storage<>, ecs::config::archetype_fixed_vector>;
+		using archetype_vector_dynamic = details::bucket_vector<details::archetype_storage<>, 32>;
+		using archetype_vector_type = std::conditional_t<ecs::config::archetype_fixed_vector != 0, archetype_vector_fixed, archetype_vector_dynamic>;
 
-		static world_vector _worlds;
+		static world_vector_type _worlds;
 		static std::queue<world_index_type> _world_index_queue;
 
-
 	private:
-		archetype_vector _archetypes;
+		archetype_vector_type _archetypes;
 		uint32_t _entity_max = 0;
 		uint8_t _world_index;
 
 		std::vector<details::entity_target> _entity_mapping;
 		std::queue<uint32_t> _entity_mapping_queue;
-				
-		template <typename _Res>
-		static _Res create_world_internal();
+
+		template<bool _Inheritable>
+		static typename world_storage_internal_t<_Inheritable>::create_t create_world_internal(world_vector_t<typename world_storage_internal_t<_Inheritable>::store_t>& worlds);
 
 		std::pair<entity, details::entity_target&> allocate_entity();
 
 		details::archetype_storage<>& runtime_emplace_archetype(size_t bitmask);
 
-		template <typename = std::enable_if_t<!ecs::config::world_inheritable>>
 		world(world_index_type index);
 
 	public:
@@ -73,7 +84,7 @@ namespace ecs
 
 		~world();
 
-		static std::conditional_t<ecs::config::world_inheritable, world, world&> create_world();
+		static world_storage_type::create_t create_world();
 
 		template<typename... _Components>
 		details::archetype_storage<_Components...>& emplace_archetype();
@@ -89,7 +100,7 @@ namespace ecs
 		/*template<typename... _Components>
 		inline void reserve_entities(size_t size);*/
 
-		template<typename _Component, typename... _Args, typename = std::enable_if_t<ecs::config::registry::template contains<_Component>() && std::is_constructible_v<_Component, _Args...>>>
+		template<typename _Component, typename... _Args, typename = std::enable_if_t<ecs::config::registry::template contains<_Component> && std::is_constructible_v<_Component, _Args...>>>
 		bool add_entity_component(entity entity, _Args&&... args);
 
 		template<typename _T>

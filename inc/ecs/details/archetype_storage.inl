@@ -30,7 +30,7 @@ namespace ecs::details
 	template<typename... _Components>
 	constexpr size_t archetype_storage<_Components...>::bucket::size()
 	{
-		return config::bucket_size;
+		return max_size;
 	}
 
 	template<typename... _Components>
@@ -165,7 +165,7 @@ namespace ecs::details
 			{
 				(([&]()
 				{
-					const size_t offset = component_offset<config::registry::template index_of<_Cs>()>();
+					const size_t offset = component_offset<config::registry::template index_of<_Cs>>();
 					move_func(to->get_unsafe<_Cs>(offset, toIndex), std::move(from->get_unsafe<_Cs>(offset, fromIndex)), _component_mask);
 				}, reverse) = ... = 0);
 			}
@@ -186,7 +186,7 @@ namespace ecs::details
 			{
 				(([&]()
 				{
-					const size_t offset = component_offset<config::registry::template index_of<_Cs>()>();
+					const size_t offset = component_offset<config::registry::template index_of<_Cs>>();
 					remove_func(_buckets[0]->get_unsafe<_Cs>(offset, 0), _component_mask);
 				}, reverse) = ... = 0);
 			}
@@ -212,7 +212,7 @@ namespace ecs::details
 		typedef component_row<_T> Row;
 		constexpr size_t offset = offsetof(_ComponentMatrix, Row::_elements) / config::bucket_size;
 		static_assert(offset < std::numeric_limits<uint16_t>::max(), "Component offset can no longer fit in uint16_t storage, consider upgrading to uint32_t.");
-		_component_offsets[config::registry::template index_of<_T>()] = uint16_t(offset);
+		_component_offsets[config::registry::template index_of<_T>] = uint16_t(offset);
 	}
 
 	template<typename... _Components>
@@ -220,7 +220,7 @@ namespace ecs::details
 	inline void archetype_storage<_Components...>::initialize()
 	{
 		typedef component_matrix<_Cs...> ComponentMatrix;
-		_component_mask = config::registry::template bit_mask_of<_Cs...>();
+		_component_mask = config::registry::template bit_mask_of<_Cs...>;
 		_bucket_size = sizeof(archetype_storage<_Cs...>::bucket);
 
 		(initialize_component_offset<_Cs, ComponentMatrix>(), ...);
@@ -238,7 +238,7 @@ namespace ecs::details
 
 		([&]()
 			{
-				constexpr size_t i = config::registry::template index_of<_Cs>();
+				constexpr size_t i = config::registry::template index_of<_Cs>;
 				constexpr size_t componentMask = 1ull << i;
 
 				if (componentMask & mask)
@@ -280,9 +280,9 @@ namespace ecs::details
 			{
 				typedef std::remove_reference_t<decltype(to)> _Cs;
 				
-				if (config::registry::template bit_mask_of<_Cs>() & mask)
+				if (config::registry::template bit_mask_of<_Cs> & mask)
 				{
-					const size_t newOffset = new_storage.component_offset<config::registry::template index_of<_Cs>()>();
+					const size_t newOffset = new_storage.component_offset<config::registry::template index_of<_Cs>>();
 
 					newBucket->get_unsafe<_Cs>(newOffset, newElementIndex) = std::move(to);
 					move_and_destruct(to, std::move(from));
@@ -292,9 +292,9 @@ namespace ecs::details
 			{
 				typedef std::remove_reference_t<decltype(remove)> _Cs;
 
-				if (config::registry::template bit_mask_of<_Cs>() & mask)
+				if (config::registry::template bit_mask_of<_Cs> & mask)
 				{
-					const size_t newOffset = new_storage.component_offset<config::registry::template index_of<_Cs>()>();
+					const size_t newOffset = new_storage.component_offset<config::registry::template index_of<_Cs>>();
 
 					move_and_destruct(newBucket->get_unsafe<_Cs>(newOffset, newElementIndex), std::move(remove));
 				}
@@ -310,7 +310,7 @@ namespace ecs::details
 			{
 				typedef std::remove_reference_t<decltype(to)> _Cs;
 
-				if (config::registry::template bit_mask_of<_Cs>() & mask)
+				if (config::registry::template bit_mask_of<_Cs> & mask)
 					move_and_destruct(to, std::move(from));
 			},
 			[](auto& remove, auto mask)
@@ -319,7 +319,7 @@ namespace ecs::details
 
 				if constexpr (!std::is_trivially_destructible_v<_Cs>)
 				{
-					if (config::registry::template bit_mask_of<_Cs>() & mask)
+					if (config::registry::template bit_mask_of<_Cs> & mask)
 						remove.~_Cs();
 				}
 			});

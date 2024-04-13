@@ -67,6 +67,9 @@ namespace ecs
 				alignas(8) ComponentData _component_data;
 
 			public:
+				static constexpr size_t max_size = config::bucket_size;
+
+				// returns max size, not currently stored entities
 				static constexpr size_t size();
 
 				constexpr ComponentData& components();
@@ -107,7 +110,7 @@ namespace ecs
 			size_t _component_mask = 0;
 
 			// stored as `offset / _Size` removing unused precision
-			uint16_t _component_offsets[ecs::config::registry::size()];
+			uint16_t _component_offsets[ecs::config::registry::count];
 
 			size_t _entity_count = 0;
 			std::vector<std::unique_ptr<bucket>> _buckets;
