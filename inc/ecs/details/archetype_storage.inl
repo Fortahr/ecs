@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <utility>
 
 #include "../config.h"
@@ -51,7 +52,7 @@ namespace ecs::details
 	template<typename _T>
 	constexpr _T& archetype_storage<_Components...>::bucket::get(size_t index)
 	{
-		return static_cast<const component_row<_T>&>(_component_data)[index];
+		return static_cast<component_row<_T>&>(_component_data)[index];
 	}
 
 	template<typename... _Components>
@@ -390,12 +391,12 @@ namespace ecs::details
 	template<typename _T>
 	inline _T* archetype_storage<_Components...>::get_component(entity_target entity) const
 	{
-		size_t offset = _component_offsets[config::registry::template index_of<_T>()];
+		size_t offset = _component_offsets[config::registry::template index_of<_T>];
 		if (offset != std::numeric_limits<uint16_t>::max())
 		{
 			size_t index = entity._index % config::bucket_size, bucketIndex = entity._index / config::bucket_size;
 
-			auto bucket = _buckets[bucketIndex];
+			auto& bucket = _buckets[bucketIndex];
 			const uintptr_t componentStart = uintptr_t(&bucket->components());
 
 			return reinterpret_cast<_T*>(componentStart + (offset * config::bucket_size)) + index;

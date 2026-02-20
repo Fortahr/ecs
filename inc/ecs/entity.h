@@ -63,6 +63,11 @@ namespace ecs
 		uint8_t get_world() const;
 
 		bool valid() const;
+
+		inline bool operator==(const entity& r) const
+		{
+			return this->_equality == r._equality;
+		}
 	};
 
 	static_assert(sizeof(entity) == sizeof(uint64_t));

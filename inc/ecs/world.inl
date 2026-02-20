@@ -163,7 +163,7 @@ namespace ecs
 		auto& storage = emplace_archetype<_Components...>();
 		auto storage_index = storage.emplace(entity, std::forward<_Components>(move)...);
 
-		mapping.set(static_cast<details::archetype_storage<>*>(&storage), storage_index);
+		mapping.set(reinterpret_cast<details::archetype_storage<>*>(&storage), storage_index);
 
 		return entity;
 	}

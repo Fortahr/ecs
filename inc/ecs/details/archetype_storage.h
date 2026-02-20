@@ -5,6 +5,7 @@
 #include <utility>
 #include <cstdlib>
 
+#include "../config_registry.h"
 #include "../utils.h"
 #include "component_matrix.h"
 
