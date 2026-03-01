@@ -66,7 +66,7 @@ namespace ecs
 
 		inline bool operator==(const entity& r) const
 		{
-			return this->_equality == r._equality;
+			return this->_id == r._id && this->_equality == r._equality;
 		}
 	};
 
